@@ -13,7 +13,7 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
    for h in $(python3 -c "import json;print(' '.join(a['handle'] for a in json.load(open('agent/accounts.json'))['accounts']))"); do
      curl -sS -X POST "$DASHBOARD_URL/api/scrape" \
        -H "content-type: application/json" -H "x-pipeline-secret: $PIPELINE_SECRET" \
-       -d "{\"handle\":\"$h\"}" -o "/tmp/scrape_$h.json" -w "$h %{http_code}\n"
+       -d "{\"handle\":\"$h\",\"region\":\"ID\"}" -o "/tmp/scrape_$h.json" -w "$h %{http_code}\n"
    done
    ```
    Kalau ada yang gagal, lanjut saja dan catat di laporan akhir.

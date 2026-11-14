@@ -8,7 +8,7 @@ export async function onRequestPost(context) {
   try {
     const body = await request.json().catch(() => ({}));
     const mode = body.mode || "tiktok_account"; // tiktok_account | ads_library | tiktok_shop | creator_emails
-    const handle = (body.handle || "terasehat").replace(/^@/, "").trim();
+    const handle = (body.handle || "terasehat2").replace(/^@/, "").trim();
     const keyword = (body.keyword || "herbal kesehatan").trim();
     const apiKey = env.SCRAPECREATORS_API_KEY;
 
@@ -21,7 +21,7 @@ export async function onRequestPost(context) {
     if (mode === "tiktok_account") {
       const [profRes, vidRes] = await Promise.all([
         fetch(`https://api.scrapecreators.com/v1/tiktok/profile?handle=${encodeURIComponent(handle)}`, { headers }),
-        fetch(`https://api.scrapecreators.com/v3/tiktok/profile/videos?handle=${encodeURIComponent(handle)}`, { headers })
+        fetch(`https://api.scrapecreators.com/v3/tiktok/profile/videos?handle=${encodeURIComponent(handle)}&region=${encodeURIComponent(body.region || "ID")}&sort_by=${body.sort_by === "popular" ? "popular" : "latest"}`, { headers })
       ]);
       const prof = await profRes.json();
       const vids = await vidRes.json();
@@ -34,6 +34,7 @@ export async function onRequestPost(context) {
       const items = await Promise.all(awemes.slice(0, 15).map(async (v) => {
         const st = v.statistics || {};
         const views = st.play_count || 0;
+        const isCarousel = !!v.image_post_info;
         const likes = st.digg_count || 0;
         const comments = st.comment_count || 0;
         const shares = st.share_count || 0;
@@ -70,7 +71,8 @@ export async function onRequestPost(context) {
           id: v.aweme_id,
           script_code: scriptCode || ("VID-" + String(v.aweme_id).slice(-4)),
           creative_name: creativeName,
-          title: desc.split("\n")[0].slice(0, 90) || "(Tanpa judul)",
+          title: (isCarousel ? "[CAR] " : "[VID] ") + (desc.split("#")[0].trim().slice(0, 90) || "(Tanpa judul)"),
+          creator_name: "@" + handle,
           published_at: v.create_time ? new Date(v.create_time * 1000).toISOString().slice(0, 10) : "",
           duration_s: Math.round(((v.video && v.video.duration) || 0) / 100) / 10,
           views,
@@ -84,7 +86,8 @@ export async function onRequestPost(context) {
           transcript_full: transcriptFull,
           total_score: score,
           rank_tier: tier,
-          video_url: `https://www.tiktok.com/@${handle}/video/${v.aweme_id}`
+          video_url: `https://www.tiktok.com/@${handle}/video/${v.aweme_id}`,
+          is_carousel: isCarousel
         };
       }));
 
@@ -93,9 +96,9 @@ export async function onRequestPost(context) {
         for (const it of items) {
           await env.DB.prepare(`
             INSERT INTO contents_ads
-            (id, script_code, creative_name, title, published_at, duration_s, views, likes, comments, shares, saves,
+            (id, script_code, creative_name, title, creator_name, published_at, duration_s, views, likes, comments, shares, saves,
              er_pct, outlier_score, hook_3s, transcript_full, total_score, rank_tier, video_url, updated_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, datetime('now'))
+            VALUES (?1, ?2, ?3, ?4, ?19, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, datetime('now'))
             ON CONFLICT(id) DO UPDATE SET
               script_code = excluded.script_code, creative_name = excluded.creative_name,
               title = excluded.title, duration_s = excluded.duration_s,
@@ -109,7 +112,7 @@ export async function onRequestPost(context) {
           `).bind(
             String(it.id), it.script_code, it.creative_name, it.title, it.published_at, it.duration_s,
             it.views, it.likes, it.comments, it.shares, it.saves, it.er_pct, it.outlier_score,
-            it.hook_3s, it.transcript_full, it.total_score, it.rank_tier, it.video_url
+            it.hook_3s, it.transcript_full, it.total_score, it.rank_tier, it.video_url, it.creator_name
           ).run();
         }
       }
