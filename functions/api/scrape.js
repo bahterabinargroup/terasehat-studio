@@ -19,11 +19,8 @@ export async function onRequestPost(context) {
     const headers = { "x-api-key": apiKey, "User-Agent": "Mozilla/5.0" };
 
     if (mode === "tiktok_account") {
-      const [profRes, vidRes] = await Promise.all([
-        fetch(`https://api.scrapecreators.com/v1/tiktok/profile?handle=${encodeURIComponent(handle)}`, { headers }),
-        fetch(`https://api.scrapecreators.com/v3/tiktok/profile/videos?handle=${encodeURIComponent(handle)}&region=${encodeURIComponent(body.region || "ID")}&sort_by=${body.sort_by === "popular" ? "popular" : "latest"}`, { headers })
-      ]);
-      const prof = await profRes.json();
+      // Cuma 1 request (1 kredit): 10 video terbaru. Data profil tidak ditarik biar hemat kredit.
+      const vidRes = await fetch(`https://api.scrapecreators.com/v3/tiktok/profile/videos?handle=${encodeURIComponent(handle)}&region=${encodeURIComponent(body.region || "ID")}&sort_by=${body.sort_by === "popular" ? "popular" : "latest"}`, { headers });
       const vids = await vidRes.json();
       const awemes = vids.aweme_list || [];
 
@@ -121,8 +118,6 @@ export async function onRequestPost(context) {
         ok: true,
         handle,
         credits_remaining: vids.credits_remaining,
-        profile: prof.user || {},
-        stats: prof.stats || {},
         items
       });
     }
