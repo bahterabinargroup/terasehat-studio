@@ -64,19 +64,19 @@
 
   function tierBadge(tier, score) {
     if (tier === "WINNING" || score >= 75) {
-      return `<span class="badge badge-fyp">🟢 WINNING (Skor ${score}/100)</span>`;
+      return `<span class="badge badge-fyp">WINNING (Skor ${score}/100)</span>`;
     }
     if (tier === "POTENSIAL" || score >= 45) {
-      return `<span class="badge badge-mid">🟡 POTENSIAL (Skor ${score}/100)</span>`;
+      return `<span class="badge badge-mid">POTENSIAL (Skor ${score}/100)</span>`;
     }
-    return `<span class="badge badge-low">🔴 BONCOS / EVALUASI (Skor ${score}/100)</span>`;
+    return `<span class="badge badge-low">BONCOS (Skor ${score}/100)</span>`;
   }
 
   function humanBadge(status) {
-    if (status === "approved") return `<span class="badge badge-fyp">✅ Approved (Siap Syuting)</span>`;
-    if (status === "revision") return `<span class="badge badge-low">✏️ Perlu Revisi</span>`;
-    if (status === "published") return `<span class="badge badge-purple">🚀 Sudah Tayang</span>`;
-    return `<span class="badge badge-mid">⏳ Menunggu Check by Human</span>`;
+    if (status === "approved") return `<span class="badge badge-fyp">Approved</span>`;
+    if (status === "revision") return `<span class="badge badge-low">Perlu revisi</span>`;
+    if (status === "published") return `<span class="badge badge-purple">Sudah tayang</span>`;
+    return `<span class="badge badge-mid">Menunggu review</span>`;
   }
 
   function updateSidebarBadges() {
@@ -103,7 +103,7 @@
       <div style="padding:12px 14px;background:var(--l2);border-radius:var(--r-sm);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div style="flex:1;min-width:240px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-weight:700;color:var(--lime)">RANK #${idx + 1}</span>
+            <span style="font-weight:600">#${idx + 1}</span>
             <span class="badge badge-purple">${a.script_code}</span>
             ${tierBadge(a.rank_tier, a.total_score)}
             <span style="font-size:11.5px;color:var(--teks3)">👤 ${a.creator_name}</span>
@@ -112,8 +112,8 @@
           <div style="font-size:12px;color:var(--teks2)">🎙️ Hook 3s: <i>"${a.hook_3s}"</i></div>
         </div>
         <div style="text-align:right;min-width:170px">
-          <div style="font-size:16px;font-weight:700;color:var(--naik)">${rp(a.gmv_idr)}</div>
-          <div style="font-size:12px;color:var(--teks2)">ROAS <b style="color:var(--lime)">${a.roas}x</b> • ${fmt(a.orders)} pesanan • ${fmt(a.views)} views</div>
+          <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em">${rp(a.gmv_idr)}</div>
+          <div style="font-size:12px;color:var(--teks2)">ROAS <b>${a.roas}x</b> • ${fmt(a.orders)} pesanan • ${fmt(a.views)} views</div>
         </div>
       </div>
     `).join("");
@@ -121,19 +121,19 @@
     return `
       <div class="topbar">
         <div>
-          <h1>📊 Dashboard Pipeline — Nama Toko: Terasehat</h1>
-          <p>Closed-Loop System: Tokopedia/TikTok Shop Seller Center + ScrapeCreators + Claude Brain + Tim Creator Manusia.</p>
+          <h1>Dashboard</h1>
+          <p>Data Seller Center dan TikTok, dibaca Claude, jadi Visual Guide buat tim kreator.</p>
         </div>
         <div class="topbar-actions">
-          <button class="btn" id="btn-open-import">📥 Input / Upload Data Seller Center</button>
-          <button class="btn btn-primary" data-go-tab="scripts">📝 Cek ${waitingScripts} Script Baru (Check by Human) →</button>
+          <button class="btn" id="btn-open-import">Input data Seller Center</button>
+          <button class="btn btn-primary" data-go-tab="scripts">Review ${waitingScripts} Visual Guide</button>
         </div>
       </div>
 
       <!-- Visualisasi Alur Closed-Loop Sesuai Gambar 2 -->
-      <div class="card" style="border:1px solid var(--lime-line);background:linear-gradient(180deg,rgba(124,58,237,0.08),rgba(28,28,28,0.96))">
+      <div class="card" style="background:var(--color-surface-alt)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-          <span class="badge badge-purple">🔄 ARSITEKTUR CLOSED-LOOP TERASEHAT (AKTIF)</span>
+          <span class="badge badge-purple">Alur pipeline</span>
           <span style="font-size:12px;color:var(--teks2)">Klik kotak mana saja untuk pindah ke modul terkait</span>
         </div>
         <div class="kpi-grid" style="margin-bottom:0">
@@ -144,12 +144,12 @@
           </div>
           <div class="kpi-card" style="cursor:pointer;border:1px solid var(--garis2)" data-go-tab="dna">
             <div class="kpi-lbl">2. AI AGENT (BRAIN)</div>
-            <div style="font-weight:600;font-size:14px;margin-bottom:4px;color:var(--lime)">Claude Pro (Self-Learning)</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Claude (Self-Learning)</div>
             <div class="kpi-sub">Find Winning DNA & Evaluasi Algoritma</div>
           </div>
           <div class="kpi-card" style="cursor:pointer;border:1px solid var(--garis2)" data-go-tab="scripts">
             <div class="kpi-lbl">3. BRIEF & REPORT</div>
-            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Script (Check by Human)</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Visual Guide (Check by Human)</div>
             <div class="kpi-sub">Daily Checklist • Creative Guide • Review</div>
           </div>
           <div class="kpi-card" style="cursor:pointer;border:1px solid var(--garis2)" data-go-tab="checklist">
@@ -191,10 +191,10 @@
       <div class="card">
         <div class="card-hd">
           <div>
-            <h2 class="card-title">🏆 Top 3 Konten & Iklan Penghasil GMV Tertinggi (Hasil Ranking Otomatis)</h2>
+            <h2 class="card-title">Top 3 konten</h2>
             <p class="card-desc">Diurutkan otomatis berdasarkan kombinasi ROAS Seller Center, GMV, Share/Save Ratio, dan Views.</p>
           </div>
-          <button class="btn" data-go-tab="ranking">Lihat Ranking Top-to-Bottom Lengkap →</button>
+          <button class="btn" data-go-tab="ranking">Lihat semua ranking</button>
         </div>
         ${top3Html}
       </div>
@@ -234,17 +234,17 @@
     return `
       <div class="topbar">
         <div>
-          <h1>🏆 Output (ADS) Result — Ranking & Scoring Top-to-Bottom</h1>
+          <h1>Ranking Konten & Iklan</h1>
           <p>Data gabungan Tokopedia/TikTok Shop Seller Center + ScrapeCreators, diurutkan dari skor tertinggi ke terendah untuk dievaluasi Claude.</p>
         </div>
         <div class="topbar-actions">
           <select class="input" id="sel-tier-filter">
             <option value="ALL" ${state.tierFilter === "ALL" ? "selected" : ""}>Semua Tier (${(state.data.contents_ads || []).length})</option>
-            <option value="WINNING" ${state.tierFilter === "WINNING" ? "selected" : ""}>🟢 WINNING (Skor ≥75)</option>
-            <option value="POTENSIAL" ${state.tierFilter === "POTENSIAL" ? "selected" : ""}>🟡 POTENSIAL (Skor 45-74)</option>
-            <option value="BONCOS" ${state.tierFilter === "BONCOS" ? "selected" : ""}>🔴 BONCOS / EVALUASI (<45)</option>
+            <option value="WINNING" ${state.tierFilter === "WINNING" ? "selected" : ""}>WINNING (Skor ≥75)</option>
+            <option value="POTENSIAL" ${state.tierFilter === "POTENSIAL" ? "selected" : ""}>POTENSIAL (Skor 45-74)</option>
+            <option value="BONCOS" ${state.tierFilter === "BONCOS" ? "selected" : ""}>BONCOS (<45)</option>
           </select>
-          <button class="btn btn-primary" id="btn-open-import">📥 + Tambah Hasil Ads Seller Center</button>
+          <button class="btn btn-primary" id="btn-open-import">Tambah hasil Seller Center</button>
         </div>
       </div>
 
@@ -308,21 +308,21 @@
     return `
       <div class="topbar">
         <div>
-          <h1>🧠 Self-Learning: Find Winning DNA & Algorithm (Claude Brain)</h1>
+          <h1>Winning DNA</h1>
           <p>Memori pembelajaran otomatis dari perbandingan konten Ranking Teratas (ROAS >5x) vs Konten Boncos di Seller Center Terasehat.</p>
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-primary" id="btn-run-self-learning">⚡ Jalankan Evaluasi Self-Learning Baru</button>
+          <button class="btn btn-primary" id="btn-run-self-learning">Jadwal self-learning</button>
         </div>
       </div>
 
       <div class="grid-2">
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:12px;color:var(--naik)">✅ Winning DNA (Wajib Dipakai Tim Konten)</h2>
+          <h2 class="card-title" style="margin-bottom:12px">Pola yang menang</h2>
           ${winHtml}
         </div>
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:12px;color:var(--turun)">❌ Anti-Pattern (Terbukti Boncos di Seller Center)</h2>
+          <h2 class="card-title" style="margin-bottom:12px">Pola yang dihindari</h2>
           ${antiHtml}
           <div style="background:var(--l2);padding:14px;border-radius:var(--r-sm);margin-top:14px">
             <div style="font-weight:600;color:var(--lime);margin-bottom:6px">🤖 Cara Kerja Self-Learning di Laptop Owner:</div>
@@ -362,9 +362,9 @@
               <div style="font-size:12px;color:var(--lime);margin-top:2px">🧬 Sumber DNA: ${s.based_on_dna}</div>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn btn-primary" style="padding:6px 11px;font-size:12px" data-script-act="approved" data-idx="${idx}">✅ Approve (Check by Human)</button>
-              <button class="btn" style="padding:6px 11px;font-size:12px" data-script-act="revision" data-idx="${idx}">✏️ Minta Revisi</button>
-              <button class="btn" style="padding:6px 11px;font-size:12px" data-script-act="published" data-idx="${idx}">🚀 Tandai Sudah Tayang</button>
+              <button class="btn btn-primary" style="height:32px;padding:0 12px;font-size:13px" data-script-act="approved" data-idx="${idx}">Approve</button>
+              <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="revision" data-idx="${idx}">Minta revisi</button>
+              <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="published" data-idx="${idx}">Sudah tayang</button>
             </div>
           </div>
 
@@ -393,7 +393,7 @@
     return `
       <div class="topbar">
         <div>
-          <h1>🎬 Brief: Visual Guide (Check by Human)</h1>
+          <h1>Visual Guide</h1>
           <p>Visual Guide per detik yang diracik Claude dari Winning DNA. Owner/Leader <b>Approve</b> dulu sebelum disyuting tim kreator. Pakai <b>nama creative</b> persis di nama file, caption, dan nama iklan.</p>
         </div>
       </div>
@@ -422,9 +422,9 @@
             <div style="font-size:12px;color:var(--lime);margin-top:2px">🧬 Dasar: ${esc(s.based_on_dna)}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-primary" style="padding:6px 11px;font-size:12px" data-script-act="approved" data-idx="${idx}">✅ Approve</button>
-            <button class="btn" style="padding:6px 11px;font-size:12px" data-script-act="revision" data-idx="${idx}">✏️ Minta Revisi</button>
-            <button class="btn" style="padding:6px 11px;font-size:12px" data-script-act="published" data-idx="${idx}">🚀 Sudah Tayang</button>
+            <button class="btn btn-primary" style="height:32px;padding:0 12px;font-size:13px" data-script-act="approved" data-idx="${idx}">Approve</button>
+            <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="revision" data-idx="${idx}">Minta revisi</button>
+            <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="published" data-idx="${idx}">Sudah tayang</button>
           </div>
         </div>
         <div style="font-size:12px;font-weight:700;color:var(--teks2);margin-bottom:6px">VISUAL</div>
@@ -456,7 +456,7 @@
     return `
       <div class="topbar">
         <div>
-          <h1>☑️ Daily Checklist & Evaluasi Tim Content Creator (Manusia)</h1>
+          <h1>Daily Checklist</h1>
           <p>SOP harian dari persetujuan naskah, syuting manual oleh tim kreator, upload dengan kode unik, hingga evaluasi hasil Seller Center.</p>
         </div>
         <div class="topbar-actions">
@@ -465,7 +465,7 @@
       </div>
 
       <div class="card">
-        <h2 class="card-title" style="margin-bottom:12px">📋 Checklist Harian Tim Terasehat</h2>
+        <h2 class="card-title" style="margin-bottom:12px">Checklist hari ini</h2>
         ${listHtml}
       </div>
     `;
@@ -490,7 +490,7 @@
     return `
       <div class="topbar">
         <div>
-          <h1>📡 ScrapeCreators Radar: TikTok Ads Library, TikTok Shop & Creator Emails</h1>
+          <h1>Radar Kompetitor</h1>
           <p>Sesuai dokumentasi ScrapeCreators di diagram: memantau iklan kompetitor, produk naik di TikTok Shop, dan mencari email kreator afiliasi.</p>
         </div>
       </div>
@@ -505,7 +505,7 @@
     box.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <h2 style="margin:0;font-size:17px">📥 Input / Simulasi Data Baru dari Seller Center</h2>
-        <button class="btn" id="btn-close-modal">✕ Tutup</button>
+        <button class="btn" id="btn-close-modal">Tutup</button>
       </div>
       <p style="font-size:12.5px;color:var(--teks2);margin-top:0">
         Masukkan hasil performa video/iklan terbaru dari <b>Tokopedia / TikTok Shop Seller Center</b>. Sistem akan otomatis menghitung <b>Total Score (0–100)</b> dan mengurutkan ulang <b>Ranking Top-to-Bottom</b>:
@@ -527,7 +527,7 @@
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px">
-        <button class="btn btn-primary" id="btn-save-import">🚀 Hitung Skor & Masukkan ke Ranking</button>
+        <button class="btn btn-primary" id="btn-save-import">Hitung skor & simpan</button>
       </div>
     `;
     modal.classList.add("open");
@@ -572,7 +572,7 @@
     else if (state.tab === "checklist") container.innerHTML = renderChecklist();
     else if (state.tab === "radar") container.innerHTML = renderRadar();
     if (state.loading || state.error) {
-      container.insertAdjacentHTML("afterbegin", `<div class="card" style="margin-bottom:12px;color:${state.error ? "var(--merah, #ef4444)" : "var(--teks2)"}">${state.error ? "⚠️ Gagal ambil data: " + esc(state.error) + ` <button class="btn" id="btn-reload" style="margin-left:8px">Coba lagi</button>` : "Memuat data dari database..."}</div>`);
+      container.insertAdjacentHTML("afterbegin", `<div class="card" style="margin-bottom:12px;color:${state.error ? "var(--color-ember)" : "var(--color-mid-gray)"}">${state.error ? "⚠️ Gagal ambil data: " + esc(state.error) + ` <button class="btn" id="btn-reload" style="margin-left:8px">Coba lagi</button>` : "Memuat data dari database..."}</div>`);
       const r = document.getElementById("btn-reload");
       if (r) r.onclick = () => { askSecret(); loadState(); };
     }

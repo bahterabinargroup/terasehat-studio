@@ -24,9 +24,17 @@ export async function onRequestPost(context) {
       const vids = await vidRes.json();
       const awemes = vids.aweme_list || [];
 
-      const avgViews = awemes.length
+      let avgViews = awemes.length
         ? Math.max(1, Math.round(awemes.reduce((s, v) => s + ((v.statistics && v.statistics.play_count) || 0), 0) / awemes.length))
         : 1;
+      // Bandingkan dengan rata-rata seluruh video akun di database, bukan cuma 10 video terbaru,
+      // biar video sepi tidak dapat skor tinggi hanya karena tetangganya juga sepi.
+      if (env.DB) {
+        const hist = await env.DB.prepare(
+          "SELECT AVG(views) AS a, COUNT(*) AS n FROM contents_ads WHERE creator_name = ?1"
+        ).bind("@" + handle).first();
+        if (hist && hist.n >= 20 && hist.a > avgViews) avgViews = Math.round(hist.a);
+      }
 
       const items = await Promise.all(awemes.slice(0, 15).map(async (v) => {
         const st = v.statistics || {};
@@ -61,7 +69,9 @@ export async function onRequestPost(context) {
         }
 
         // Hitung skor organik awal (0-100)
-        const score = Math.min(100, Math.round(outlier * 28 + er * 4 + (shares / Math.max(views, 1)) * 2000));
+        // Engagement baru dihitung penuh setelah 1.000 views; video sepi tidak boleh menang karena 1 share.
+        const conf = Math.min(1, views / 1000);
+        const score = Math.min(100, Math.round(outlier * 28 + (er * 4 + (shares / Math.max(views, 1)) * 2000) * conf));
         const tier = score >= 75 ? "WINNING" : (score >= 45 ? "POTENSIAL" : "BONCOS");
 
         return {
