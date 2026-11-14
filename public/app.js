@@ -218,7 +218,7 @@
           </div>
           <div style="font-size:11.5px;color:var(--teks2)">🎙️ Hook 3s: <i>"${a.hook_3s}"</i></div>
           <div style="font-size:11px;color:var(--teks3);margin-top:3px">👤 ${a.creator_name} • 📅 ${a.published_at} • ⏱️ ${a.duration_s}s</div>
-          <div style="font-size:11.5px;color:var(--lime);margin-top:4px">🧠 <b>Evaluasi Claude:</b> ${a.claude_evaluation}</div>
+          ${a.claude_evaluation ? `<div style="font-size:13px;color:var(--color-ink);margin-top:6px"><b>Evaluasi Claude:</b> ${esc(a.claude_evaluation)}</div>` : ""}
         </td>
         <td>${tierBadge(a.rank_tier, a.total_score)}</td>
         <td class="num" style="font-weight:700;color:var(--naik)">${rp(a.gmv_idr)}</td>
