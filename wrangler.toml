@@ -1,0 +1,8 @@
+name = "terasehat-studio"
+pages_build_output_dir = "public"
+compatibility_date = "2026-10-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "terasehat-db"
+database_id = "555b25ee-6473-4c43-88fb-eb0ac24de2a8"

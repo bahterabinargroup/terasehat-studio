@@ -1,0 +1,12 @@
+{
+  "name": "terasehat-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Terasehat Content & Ads Intelligence Pipeline (Cloudflare Pages + D1 + ScrapeCreators + Claude Brain)",
+  "scripts": {
+    "dev": "npx wrangler pages dev public",
+    "deploy": "npx wrangler pages deploy public --project-name terasehat-studio --branch main",
+    "db:init": "npx wrangler d1 execute terasehat-db --remote --file=./schema.sql",
+    "brain": "bash agent/garap-terasehat.sh"
+  }
+}

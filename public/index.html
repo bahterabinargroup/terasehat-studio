@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151515">
+  <title>Terasehat Pipeline — Content & Ads Intelligence (Cloudflare + Claude Brain)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <div class="brand-logo">T</div>
+        <div>
+          <b>Terasehat Pipeline</b>
+          <span>Cloudflare + Claude Brain</span>
+        </div>
+      </div>
+
+      <div class="pipe-box">
+        <div class="pipe-hd">
+          <span>NAMA TOKO</span>
+          <span class="dot-live">Loop Aktif</span>
+        </div>
+        <div class="pipe-acct">Terasehat Official</div>
+        <div class="pipe-sub">Tokopedia & TikTok Shop Seller Center</div>
+        <div class="pipe-sub" style="margin-top:4px;color:var(--lime)" id="side-sync">Brain: Claude Pro (09:00 & 21:00)</div>
+      </div>
+
+      <div class="nav-sec">Alur Closed-Loop Pipeline</div>
+      <button class="nav-btn active" data-tab="overview">
+        <span>1. 📊 Dashboard Pipeline</span>
+        <span class="nav-badge">Utama</span>
+      </button>
+      <button class="nav-btn" data-tab="ranking">
+        <span>2. 🏆 Output ADS & Ranking</span>
+        <span class="nav-badge" id="badge-ads-count">6</span>
+      </button>
+      <button class="nav-btn" data-tab="dna">
+        <span>3. 🧠 Self-Learning & DNA</span>
+        <span class="nav-badge">Claude</span>
+      </button>
+      <button class="nav-btn" data-tab="scripts">
+        <span>4. 📝 Script & Creative Guide</span>
+        <span class="nav-badge" id="badge-script-count">3</span>
+      </button>
+      <button class="nav-btn" data-tab="checklist">
+        <span>5. ☑️ Daily Checklist & Review</span>
+        <span class="nav-badge" id="badge-chk-count">4</span>
+      </button>
+      <button class="nav-btn" data-tab="radar">
+        <span>6. 📡 ScrapeCreators Radar</span>
+        <span class="nav-badge">3 Sumber</span>
+      </button>
+
+      <div class="side-foot">
+        <div><b>Input 1:</b> Seller Center (GMV & Ads)</div>
+        <div><b>Input 2:</b> ScrapeCreators API</div>
+        <div><b>Brain:</b> Claude Pro (Self-Learning)</div>
+        <div><b>Eksekutor:</b> Tim Creator (Manusia)</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div id="view-container"></div>
+    </main>
+  </div>
+
+  <!-- Modal Import Seller Center / Detail Konten -->
+  <div class="modal-backdrop" id="app-modal">
+    <div class="modal" id="app-modal-content"></div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
