@@ -18,6 +18,31 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
    ```
    Kalau ada yang gagal, lanjut saja dan catat di laporan akhir.
 
+1b. **Tarik laporan iklan GMV Max per video** — HANYA di jadwal 06:00 WIB (cek: `date -u +%H` = `23`),
+   atau kalau prompt routine bilang "paksa iklan". Di jam lain lewati langkah ini.
+   Pakai connector **TikTok for Business** (tool `tool_execute`). ID ada di `agent/ads_config.json`.
+   Periode: 7 hari terakhir sampai kemarin (zona WIB), format `YYYY-MM-DD`.
+   1. `tool_execute` → `tool_name: "gmv_max_campaign_get"`, params
+      `{"advertiser_id": ADV, "filtering": {"gmv_max_promotion_types": ["PRODUCT_GMV_MAX"]}, "page_size": 100,
+        "fields": ["campaign_id","campaign_name","operation_status"]}` → semua `campaign_id`.
+      Lalu `gmv_max_report_get` params
+      `{"advertiser_id": ADV, "store_ids": [STORE], "start_date": S, "end_date": E,
+        "dimensions": ["campaign_id","item_group_id"], "metrics": ["cost"], "page_size": 100,
+        "filtering": {"campaign_ids": [semua campaign_id]}}`.
+      Kumpulkan `campaign_id` dan `item_group_id` yang `cost` > 0.
+   2. `tool_execute` → `gmv_max_report_get` dengan `"dimensions": ["item_id"]`,
+      `"filtering": {"campaign_ids": [...], "item_group_ids": [...]}`, `"sort_field": "cost"`, `"page_size": 50`,
+      `"metrics": ["cost","gross_revenue","roi","orders","product_impressions","product_clicks","ad_click_rate",
+      "ad_conversion_rate","ad_video_view_rate_2s","ad_video_view_rate_6s","ad_video_view_rate_p100"]`.
+   3. Tulis `/tmp/ads.json` = `{"period": "S..E", "items": [ {"item_id": ..., <semua metrik di atas>} ]}`
+      (buang baris `item_id` = `-1`, itu kartu produk, bukan video). Lalu kirim:
+      ```bash
+      curl -sS -X POST "$DASHBOARD_URL/api/ads-sync" \
+        -H "content-type: application/json" -H "x-pipeline-secret: $PIPELINE_SECRET" \
+        --data-binary @/tmp/ads.json
+      ```
+   Kalau connector tidak tersedia atau error izin, lewati dan catat di laporan akhir.
+
 2. **Ambil data dashboard lalu ringkas:**
    ```bash
    curl -sS "$DASHBOARD_URL/api/state" -H "x-pipeline-secret: $PIPELINE_SECRET" -o /tmp/state.json
@@ -42,4 +67,4 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
 
 6. **Jangan** commit, push, atau mengubah file di repo.
 
-7. **Laporan akhir** (singkat): status scrape, jumlah DNA / Visual Guide / evaluasi / checklist yang terkirim, dan error kalau ada.
+7. **Laporan akhir** (singkat): status scrape, status iklan (jumlah video iklan terkirim atau "dilewati"), jumlah DNA / Visual Guide / evaluasi / checklist yang terkirim, dan error kalau ada.

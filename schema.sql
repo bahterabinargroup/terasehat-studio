@@ -47,6 +47,14 @@ CREATE TABLE IF NOT EXISTS contents_ads (
   rank_tier TEXT DEFAULT 'POTENSIAL', -- WINNING | POTENSIAL | BONCOS
   claude_evaluation TEXT,
   video_url TEXT,
+  source TEXT,              -- tiktok_scrape | seller_center | gmv_max
+  ads_period TEXT,
+  product_impressions INTEGER DEFAULT 0,
+  product_clicks INTEGER DEFAULT 0,
+  ad_cvr_pct REAL DEFAULT 0,
+  hold_2s_pct REAL DEFAULT 0,   -- % penonton iklan bertahan 2 detik (kekuatan hook)
+  hold_6s_pct REAL DEFAULT 0,
+  completion_pct REAL DEFAULT 0,
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
