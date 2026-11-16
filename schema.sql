@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS contents_ads (
   claude_evaluation TEXT,
   video_url TEXT,
   source TEXT,              -- tiktok_scrape | seller_center | gmv_max
+  account_type TEXT,        -- OWN | OFFICIAL | AFFILIATE
   ads_period TEXT,
   product_impressions INTEGER DEFAULT 0,
   product_clicks INTEGER DEFAULT 0,

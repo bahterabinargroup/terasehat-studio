@@ -4,5 +4,12 @@
   "advertiser_name": "Solusi Diabetes Alami",
   "store_id": "7494641420763498126",
   "store_name": "Nutri Balance",
-  "business_center_id": "7638477020695658504"
+  "business_center_id": "7638477020695658504",
+  "official_identity_id": "7638468570237764629",
+  "identities": {
+    "7638468570237764629": "Nutri Balance (akun resmi toko)",
+    "6942753739355128834": "Solusi Sehat (@solusisehat62, akun pemasaran)",
+    "7688552758361883656": "wellness_kuy (akun pemasaran)",
+    "92cf1ad6-d5a9-55f1-9e5c-d1918f707a04": "Makan Sehat (@ruangnalar96, BC)"
+  }
 }

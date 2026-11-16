@@ -34,7 +34,19 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
       `"filtering": {"campaign_ids": [...], "item_group_ids": [...]}`, `"sort_field": "cost"`, `"page_size": 50`,
       `"metrics": ["cost","gross_revenue","roi","orders","product_impressions","product_clicks","ad_click_rate",
       "ad_conversion_rate","ad_video_view_rate_2s","ad_video_view_rate_6s","ad_video_view_rate_p100"]`.
-   3. Tulis `/tmp/ads.json` = `{"period": "S..E", "items": [ {"item_id": ..., <semua metrik di atas>} ]}`
+   2b. **Cari akun pemilik tiap video** (buat filter afiliasi). Ambil identitas sekali:
+      `tool_execute` → `gmv_max_identity_get` params
+      `{"advertiser_id": ADV, "store_id": STORE, "store_authorized_bc_id": BC}` → `identity_list`.
+      Lalu untuk tiap `item_id` dari langkah 2 (maks 50), `tool_execute` → `gmv_max_video_get` params
+      `{"advertiser_id": ADV, "store_id": STORE, "store_authorized_bc_id": BC, "need_auth_code_video": true,
+        "identity_list": [semua identitas dari identity_list, field identity_type/identity_id/store_id/identity_authorized_bc_id],
+        "keyword": item_id, "page_size": 1}`.
+      Dari `item_list[0]` ambil `identity_info.display_name` → `tt_account_name`, `text` → `caption`,
+      `video_info.duration` → `duration_s`. `account_type` = `"OFFICIAL"` kalau `identity_info.identity_id`
+      = `official_identity_id` di `agent/ads_config.json`, selain itu `"AFFILIATE"`.
+      Kalau video tidak ketemu, kosongkan saja field-nya.
+   3. Tulis `/tmp/ads.json` = `{"period": "S..E", "items": [ {"item_id": ..., <semua metrik di atas>,
+      "tt_account_name": ..., "account_type": ..., "caption": ..., "duration_s": ...} ]}`
       (buang baris `item_id` = `-1`, itu kartu produk, bukan video). Lalu kirim:
       ```bash
       curl -sS -X POST "$DASHBOARD_URL/api/ads-sync" \

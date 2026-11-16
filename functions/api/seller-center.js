@@ -41,8 +41,8 @@ export async function onRequestPost(context) {
       for (const it of scored) {
         await env.DB.prepare(`
           INSERT OR REPLACE INTO contents_ads
-          (id, script_code, title, creator_name, published_at, duration_s, views, likes, comments, shares, saves, er_pct, outlier_score, gmv_idr, orders, ad_spend_idr, roas, ctr_pct, hook_3s, total_score, rank_tier, claude_evaluation)
-          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
+          (id, account_type, script_code, title, creator_name, published_at, duration_s, views, likes, comments, shares, saves, er_pct, outlier_score, gmv_idr, orders, ad_spend_idr, roas, ctr_pct, hook_3s, total_score, rank_tier, claude_evaluation)
+          VALUES (?1, ?23, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
         `).bind(
           String(it.id),
           it.script_code || "",
@@ -65,7 +65,8 @@ export async function onRequestPost(context) {
           it.hook_3s || "",
           Number(it.total_score || 0),
           it.rank_tier || "POTENSIAL",
-          it.claude_evaluation || ""
+          it.claude_evaluation || "",
+          it.account_type || null
         ).run();
       }
     }

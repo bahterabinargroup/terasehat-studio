@@ -4,6 +4,7 @@
   const state = {
     tab: "overview",
     tierFilter: "ALL",
+    adFilter: "ALL",
     data: JSON.parse(JSON.stringify(EMPTY)),
     loading: true
   };
@@ -202,22 +203,54 @@
   }
 
   // 2. OUTPUT (ADS) RESULT & RANKING TOP-TO-BOTTOM
+  // Status iklan per konten:
+  // - Ads        = dapat biaya iklan (GMV Max) di periode laporan
+  // - Materi iklan = pernah dipasang sebagai materi iklan (ada biaya, masuk laporan GMV Max,
+  //                  atau ditandai "Digunakan di iklan" di Seller Center), walau biayanya 0
+  const isAds = (a) => Number(a.ad_spend_idr || 0) > 0;
+  const isAdMaterial = (a) => isAds(a) || a.source === "gmv_max" || /^\[ADS\]/.test(a.title || "");
+  const isAffiliate = (a) => a.account_type === "AFFILIATE";
+  const AD_FILTERS = [
+    ["ALL", "Semua", () => true],
+    ["ADS", "Ads", isAds],
+    ["NO_ADS", "Tanpa ads", (a) => !isAds(a)],
+    ["MATERIAL", "Materi iklan", isAdMaterial],
+    ["NOT_MATERIAL", "Bukan materi iklan", (a) => !isAdMaterial(a)],
+    ["AFF_MATERIAL", "Materi iklan afiliasi", (a) => isAdMaterial(a) && isAffiliate(a)],
+  ];
+  function adBadge(a) {
+    if (isAds(a)) return `<span class="badge badge-fyp">Ads</span>`;
+    if (isAdMaterial(a)) return `<span class="badge badge-mid">Materi iklan</span>`;
+    return `<span class="badge badge-low">Organik</span>`;
+  }
+  function accountBadge(a) {
+    const label = { OWN: "Akun sendiri", OFFICIAL: "Akun resmi toko", AFFILIATE: "Afiliasi" }[a.account_type];
+    return label ? `<span class="badge badge-purple">${label}</span>` : "";
+  }
+
   function renderRanking() {
-    let ads = [...(state.data.contents_ads || [])].sort((a, b) => b.total_score - a.total_score);
+    const all = state.data.contents_ads || [];
+    const adFn = (AD_FILTERS.find(f => f[0] === state.adFilter) || AD_FILTERS[0])[2];
+    let ads = all.filter(adFn).sort((a, b) => b.total_score - a.total_score);
     if (state.tierFilter !== "ALL") {
       ads = ads.filter(a => a.rank_tier === state.tierFilter);
     }
+    const segHtml = AD_FILTERS.map(([key, label, fn]) =>
+      `<button class="seg-btn ${state.adFilter === key ? "active" : ""}" data-ad-filter="${key}">${label} <span class="seg-count">${all.filter(fn).length}</span></button>`
+    ).join("");
 
     const rowsHtml = ads.map((a, idx) => `
       <tr>
         <td style="font-weight:700;color:var(--lime)">#${idx + 1}</td>
         <td>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-            <span class="badge badge-purple">${a.script_code}</span>
-            <b style="color:var(--teks)">${a.title}</b>
+            ${adBadge(a)}${accountBadge(a)}
+            <span class="badge badge-purple">${esc(a.script_code)}</span>
+            <b style="color:var(--teks)">${esc(a.title)}</b>
           </div>
           <div style="font-size:11.5px;color:var(--teks2)">🎙️ Hook 3s: <i>"${a.hook_3s}"</i></div>
           <div style="font-size:11px;color:var(--teks3);margin-top:3px">👤 ${a.creator_name} • 📅 ${a.published_at} • ⏱️ ${a.duration_s}s</div>
+          ${Number(a.hold_2s_pct) > 0 ? `<div style="font-size:12px;color:var(--color-mid-gray);margin-top:3px">Iklan: penonton bertahan 2 detik <b style="color:var(--color-ink)">${a.hold_2s_pct}%</b> · 6 detik <b style="color:var(--color-ink)">${a.hold_6s_pct}%</b> · sampai habis ${a.completion_pct}%${a.ads_period ? " · periode " + esc(a.ads_period) : ""}</div>` : ""}
           ${a.claude_evaluation ? `<div style="font-size:13px;color:var(--color-ink);margin-top:6px"><b>Evaluasi Claude:</b> ${esc(a.claude_evaluation)}</div>` : ""}
         </td>
         <td>${tierBadge(a.rank_tier, a.total_score)}</td>
@@ -235,11 +268,11 @@
       <div class="topbar">
         <div>
           <h1>Ranking Konten & Iklan</h1>
-          <p>Data gabungan Tokopedia/TikTok Shop Seller Center + ScrapeCreators, diurutkan dari skor tertinggi ke terendah untuk dievaluasi Claude.</p>
+          <p>Data gabungan TikTok (@terasehat2), Seller Center, dan iklan GMV Max, diurutkan dari skor tertinggi.</p>
         </div>
         <div class="topbar-actions">
           <select class="input" id="sel-tier-filter">
-            <option value="ALL" ${state.tierFilter === "ALL" ? "selected" : ""}>Semua Tier (${(state.data.contents_ads || []).length})</option>
+            <option value="ALL" ${state.tierFilter === "ALL" ? "selected" : ""}>Semua tier</option>
             <option value="WINNING" ${state.tierFilter === "WINNING" ? "selected" : ""}>WINNING (Skor ≥75)</option>
             <option value="POTENSIAL" ${state.tierFilter === "POTENSIAL" ? "selected" : ""}>POTENSIAL (Skor 45-74)</option>
             <option value="BONCOS" ${state.tierFilter === "BONCOS" ? "selected" : ""}>BONCOS (<45)</option>
@@ -247,6 +280,8 @@
           <button class="btn btn-primary" id="btn-open-import">Tambah hasil Seller Center</button>
         </div>
       </div>
+
+      <div class="seg" role="tablist" aria-label="Filter status iklan">${segHtml}</div>
 
       <div class="card">
         <div class="table-wrap">
@@ -265,7 +300,7 @@
                 <th class="num">CTR%</th>
               </tr>
             </thead>
-            <tbody>${rowsHtml}</tbody>
+            <tbody>${rowsHtml || `<tr><td colspan="10" style="color:var(--color-mid-gray);padding:24px 12px">Nggak ada konten di filter ini.</td></tr>`}</tbody>
           </table>
         </div>
       </div>
@@ -590,6 +625,9 @@
 
     const selTier = document.getElementById("sel-tier-filter");
     if (selTier) selTier.onchange = (e) => { state.tierFilter = e.target.value; render(); };
+    container.querySelectorAll("[data-ad-filter]").forEach(b => {
+      b.onclick = () => { state.adFilter = b.dataset.adFilter; render(); };
+    });
 
     container.querySelectorAll("[data-script-act]").forEach(btn => {
       btn.onclick = async () => {
