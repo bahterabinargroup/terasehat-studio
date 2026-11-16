@@ -44,7 +44,10 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
       Dari `item_list[0]` ambil `identity_info.display_name` → `tt_account_name`, `text` → `caption`,
       `video_info.duration` → `duration_s`. `account_type` = `"OFFICIAL"` kalau `identity_info.identity_id`
       = `official_identity_id` di `agent/ads_config.json`, selain itu `"AFFILIATE"`.
-      Kalau video tidak ketemu, kosongkan saja field-nya.
+      **Cek SEMUA item_id satu per satu, jangan berhenti walau beberapa pertama kosong.**
+      Kalau video tidak ketemu (`item_list` kosong), itu video kreator afiliasi dari luar yang ikut
+      diiklankan GMV Max: isi `account_type: "AFFILIATE"` dan biarkan `tt_account_name`, `caption`,
+      `duration_s` kosong.
    3. Tulis `/tmp/ads.json` = `{"period": "S..E", "items": [ {"item_id": ..., <semua metrik di atas>,
       "tt_account_name": ..., "account_type": ..., "caption": ..., "duration_s": ...} ]}`
       (buang baris `item_id` = `-1`, itu kartu produk, bukan video). Lalu kirim:
