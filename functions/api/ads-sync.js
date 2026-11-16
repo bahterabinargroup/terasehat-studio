@@ -22,10 +22,37 @@ export function adsScore(it, avgRev) {
   return { score, tier: score >= 75 ? "WINNING" : score >= 45 ? "POTENSIAL" : "BONCOS", roi: Math.round(roi * 100) / 100 };
 }
 
+// Satu video bisa tayang di beberapa kampanye, jadi laporan item_id bisa berisi baris dobel.
+// Angka dijumlah; persentase dirata-rata tertimbang (CTR per tayangan produk, CVR per klik, retensi per biaya).
+export function mergeDuplicates(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const id = String(r.item_id);
+    if (!map.has(id)) { map.set(id, [r]); continue; }
+    map.get(id).push(r);
+  }
+  return [...map.values()].map((g) => {
+    if (g.length === 1) return g[0];
+    const sum = (k) => g.reduce((s, x) => s + n(x[k]), 0);
+    const wavg = (k, w) => { const tw = sum(w); return tw > 0 ? Math.round(g.reduce((s, x) => s + n(x[k]) * n(x[w]), 0) / tw * 100) / 100 : n(g[0][k]); };
+    const cost = sum("cost"), rev = sum("gross_revenue");
+    const active = g.map((x) => x.creative_delivery_status).find((st) => ["DELIVERING", "LEARNING", "IN_QUEUE"].includes(st));
+    return {
+      ...g.find((x) => x.tt_account_name || x.caption) || g[0],
+      item_id: g[0].item_id, cost, gross_revenue: rev, roi: cost > 0 ? Math.round(rev / cost * 100) / 100 : 0,
+      orders: sum("orders"), product_impressions: sum("product_impressions"), product_clicks: sum("product_clicks"),
+      ad_click_rate: wavg("ad_click_rate", "product_impressions"), ad_conversion_rate: wavg("ad_conversion_rate", "product_clicks"),
+      ad_video_view_rate_2s: wavg("ad_video_view_rate_2s", "cost"), ad_video_view_rate_6s: wavg("ad_video_view_rate_6s", "cost"),
+      ad_video_view_rate_p100: wavg("ad_video_view_rate_p100", "cost"),
+      creative_delivery_status: active || g[0].creative_delivery_status,
+    };
+  });
+}
+
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json().catch(() => ({}));
-    const items = (body.items || []).filter((x) => x && x.item_id && String(x.item_id) !== "-1").slice(0, 200);
+    const items = mergeDuplicates((body.items || []).filter((x) => x && x.item_id && String(x.item_id) !== "-1")).slice(0, 200);
     if (!items.length) return Response.json({ ok: false, error: "items kosong" }, { status: 400 });
     const period = String(body.period || "");
     const windowDays = [7, 10, 30, 90, 180].includes(Number(body.window_days)) ? Number(body.window_days) : 7;

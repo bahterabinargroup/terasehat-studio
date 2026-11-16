@@ -56,7 +56,7 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
       Kalau `item_list` kosong: `account_type: "AFFILIATE"` (kreator afiliasi luar). Nama akunnya nanti diisi langkah 1d.
    3. Untuk TIAP jendela tulis `/tmp/ads_N.json` = `{"period": "S..E", "window_days": N, "items": [ {"item_id": ...,
       <semua metrik di atas>, "tt_account_name"?, "account_type"?, "caption"?, "duration_s"?} ]}`
-      (buang baris `item_id` = `-1`, itu kartu produk). Kirim **jendela 7 hari paling akhir**
+      (buang baris `item_id` = `-1`, itu kartu produk). **Salin SEMUA baris dari laporan, jangan diringkas.** Baris dengan `item_id` sama (video di beberapa kampanye) kirim apa adanya, dashboard yang menjumlahkan. Kirim **jendela 7 hari paling akhir**
       (karena dia yang menandai iklan yang sudah tidak tayang):
       ```bash
       for N in 180 90 30 10 7; do [ -f /tmp/ads_$N.json ] && curl -sS -X POST "$DASHBOARD_URL/api/ads-sync" \
