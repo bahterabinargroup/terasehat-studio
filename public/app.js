@@ -248,8 +248,12 @@
             <span class="badge badge-purple">${esc(a.script_code)}</span>
             <b style="color:var(--teks)">${esc(a.title)}</b>
           </div>
-          <div style="font-size:11.5px;color:var(--teks2)">🎙️ Hook 3s: <i>"${a.hook_3s}"</i></div>
-          <div style="font-size:11px;color:var(--teks3);margin-top:3px">👤 ${a.creator_name} • 📅 ${a.published_at} • ⏱️ ${a.duration_s}s</div>
+          ${a.hook_3s ? `<div style="font-size:12px;color:var(--teks2)">Hook: <i>"${esc(a.hook_3s)}"</i></div>` : ""}
+          <div style="font-size:12px;color:var(--teks3);margin-top:3px">${[
+            a.creator_name && a.creator_name !== "-" ? esc(a.creator_name) : "",
+            a.published_at ? esc(a.published_at) : "",
+            Number(a.duration_s) > 0 ? a.duration_s + " detik" : "",
+          ].filter(Boolean).join(" · ")}</div>
           ${Number(a.hold_2s_pct) > 0 ? `<div style="font-size:12px;color:var(--color-mid-gray);margin-top:3px">Iklan: penonton bertahan 2 detik <b style="color:var(--color-ink)">${a.hold_2s_pct}%</b> · 6 detik <b style="color:var(--color-ink)">${a.hold_6s_pct}%</b> · sampai habis ${a.completion_pct}%${a.ads_period ? " · periode " + esc(a.ads_period) : ""}</div>` : ""}
           ${a.claude_evaluation ? `<div style="font-size:13px;color:var(--color-ink);margin-top:6px"><b>Evaluasi Claude:</b> ${esc(a.claude_evaluation)}</div>` : ""}
         </td>
