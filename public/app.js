@@ -210,8 +210,10 @@
   const isAds = (a) => Number(a.ad_spend_idr || 0) > 0;
   const isAdMaterial = (a) => isAds(a) || a.source === "gmv_max" || /^\[ADS\]/.test(a.title || "");
   const isAffiliate = (a) => a.account_type === "AFFILIATE";
+  const isActiveAd = (a) => ["DELIVERING", "LEARNING", "IN_QUEUE"].includes(a.delivery_status);
   const AD_FILTERS = [
     ["ALL", "Semua", () => true],
+    ["ACTIVE", "Iklan aktif", isActiveAd],
     ["ADS", "Ads", isAds],
     ["NO_ADS", "Tanpa ads", (a) => !isAds(a)],
     ["MATERIAL", "Materi iklan", isAdMaterial],
@@ -219,7 +221,8 @@
     ["AFF_MATERIAL", "Materi iklan afiliasi", (a) => isAdMaterial(a) && isAffiliate(a)],
   ];
   function adBadge(a) {
-    if (isAds(a)) return `<span class="badge badge-fyp">Ads</span>`;
+    if (isActiveAd(a)) return `<span class="badge badge-fyp">Iklan aktif</span>`;
+    if (isAds(a)) return `<span class="badge badge-mid">Ads (tidak tayang)</span>`;
     if (isAdMaterial(a)) return `<span class="badge badge-mid">Materi iklan</span>`;
     return `<span class="badge badge-low">Organik</span>`;
   }
@@ -231,7 +234,8 @@
   function renderRanking() {
     const all = state.data.contents_ads || [];
     const adFn = (AD_FILTERS.find(f => f[0] === state.adFilter) || AD_FILTERS[0])[2];
-    let ads = all.filter(adFn).sort((a, b) => b.total_score - a.total_score);
+    let ads = all.filter(adFn).sort((a, b) =>
+      state.adFilter === "ACTIVE" ? Number(b.ad_spend_idr || 0) - Number(a.ad_spend_idr || 0) : b.total_score - a.total_score);
     if (state.tierFilter !== "ALL") {
       ads = ads.filter(a => a.rank_tier === state.tierFilter);
     }

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS contents_ads (
   video_url TEXT,
   source TEXT,              -- tiktok_scrape | seller_center | gmv_max
   account_type TEXT,        -- OWN | OFFICIAL | AFFILIATE
+  delivery_status TEXT,     -- status tayang iklan GMV Max (DELIVERING = aktif)
   ads_period TEXT,
   product_impressions INTEGER DEFAULT 0,
   product_clicks INTEGER DEFAULT 0,

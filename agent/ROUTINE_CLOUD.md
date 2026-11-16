@@ -33,7 +33,8 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
    2. `tool_execute` → `gmv_max_report_get` dengan `"dimensions": ["item_id"]`,
       `"filtering": {"campaign_ids": [...], "item_group_ids": [...]}`, `"sort_field": "cost"`, `"page_size": 50`,
       `"metrics": ["cost","gross_revenue","roi","orders","product_impressions","product_clicks","ad_click_rate",
-      "ad_conversion_rate","ad_video_view_rate_2s","ad_video_view_rate_6s","ad_video_view_rate_p100"]`.
+      "ad_conversion_rate","ad_video_view_rate_2s","ad_video_view_rate_6s","ad_video_view_rate_p100",
+      "creative_delivery_status"]`.
    2b. **Cari akun pemilik tiap video** (buat filter afiliasi). Ambil identitas sekali:
       `tool_execute` → `gmv_max_identity_get` params
       `{"advertiser_id": ADV, "store_id": STORE, "store_authorized_bc_id": BC}` → `identity_list`.
