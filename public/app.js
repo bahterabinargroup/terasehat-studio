@@ -185,7 +185,6 @@
         </div>
         <div class="topbar-actions">
           ${periodSelect()}
-          <button class="btn" id="btn-open-import">Input data Seller Center</button>
           <button class="btn btn-primary" data-go-tab="scripts">Review ${waitingScripts} Visual Guide</button>
         </div>
       </div>
@@ -343,7 +342,6 @@
             <option value="POTENSIAL" ${state.tierFilter === "POTENSIAL" ? "selected" : ""}>POTENSIAL (Skor 45-74)</option>
             <option value="BONCOS" ${state.tierFilter === "BONCOS" ? "selected" : ""}>BONCOS (<45)</option>
           </select>
-          <button class="btn btn-primary" id="btn-open-import">Tambah hasil Seller Center</button>
         </div>
       </div>
 
@@ -600,65 +598,6 @@
     `;
   }
 
-  function openImportModal() {
-    const modal = document.getElementById("app-modal");
-    const box = document.getElementById("app-modal-content");
-    box.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <h2 style="margin:0;font-size:17px">📥 Input / Simulasi Data Baru dari Seller Center</h2>
-        <button class="btn" id="btn-close-modal">Tutup</button>
-      </div>
-      <p style="font-size:12.5px;color:var(--teks2);margin-top:0">
-        Masukkan hasil performa video/iklan terbaru dari <b>Tokopedia / TikTok Shop Seller Center</b>. Sistem akan otomatis menghitung <b>Total Score (0–100)</b> dan mengurutkan ulang <b>Ranking Top-to-Bottom</b>:
-      </p>
-      <div style="display:grid;gap:10px;margin-bottom:14px">
-        <div class="grid-2" style="gap:10px">
-          <input class="input" id="imp-code" placeholder="Kode Script (contoh: TRS-019)" value="TRS-019" />
-          <input class="input" id="imp-creator" placeholder="Nama Kreator (contoh: Rian)" value="Rian (Tim Creator)" />
-        </div>
-        <input class="input" id="imp-title" placeholder="Judul Konten / Video" value="Jurnal 7 Hari Orang Tua Cobain Rutinitas Pagi Terasehat" />
-        <input class="input" id="imp-hook" placeholder="Kalimat Hook 3 Detik Pertama" value="Awalnya nyokap paling susah disuruh minum herbal, tapi setelah 7 hari nyobain seduhan pagi ini..." />
-        <div class="grid-2" style="gap:10px">
-          <input class="input" id="imp-gmv" type="number" placeholder="GMV / Omzet Seller Center (Rp)" value="52400000" />
-          <input class="input" id="imp-spend" type="number" placeholder="Biaya Iklan / Ad Spend (Rp)" value="8200000" />
-        </div>
-        <div class="grid-2" style="gap:10px">
-          <input class="input" id="imp-orders" type="number" placeholder="Jumlah Pesanan (Orders)" value="580" />
-          <input class="input" id="imp-views" type="number" placeholder="Views TikTok" value="142000" />
-        </div>
-      </div>
-      <div style="display:flex;justify-content:flex-end;gap:8px">
-        <button class="btn btn-primary" id="btn-save-import">Hitung skor & simpan</button>
-      </div>
-    `;
-    modal.classList.add("open");
-    document.getElementById("btn-close-modal").onclick = () => modal.classList.remove("open");
-    document.getElementById("btn-save-import").onclick = async () => {
-      const code = (document.getElementById("imp-code").value || "").trim().toUpperCase();
-      const m = code.match(/^TRS-?(\d{2,})/);
-      const item = {
-        id: "SC-" + (code || Date.now()),
-        script_code: m ? "TRS" + m[1] : code,
-        title: document.getElementById("imp-title").value || "Konten Terasehat",
-        creator_name: document.getElementById("imp-creator").value || "Tim Konten",
-        published_at: new Date().toISOString().slice(0, 10),
-        views: Number(document.getElementById("imp-views").value || 0),
-        gmv_idr: Number(document.getElementById("imp-gmv").value || 0),
-        ad_spend_idr: Number(document.getElementById("imp-spend").value || 0),
-        orders: Number(document.getElementById("imp-orders").value || 0),
-        hook_3s: document.getElementById("imp-hook").value || ""
-      };
-      try {
-        await api("/api/seller-center", { items: [item] });
-        modal.classList.remove("open");
-        state.tab = "ranking";
-        await loadState();
-      } catch (e) {
-        alert("Gagal simpan: " + e.message);
-      }
-    };
-  }
-
   function render() {
     updateSidebarBadges();
     document.querySelectorAll(".nav-btn").forEach(btn => {
@@ -686,8 +625,6 @@
       };
     });
 
-    const btnImport = document.getElementById("btn-open-import");
-    if (btnImport) btnImport.onclick = openImportModal;
 
     const selPeriod = document.getElementById("sel-period");
     if (selPeriod) selPeriod.onchange = (e) => {

@@ -246,7 +246,7 @@ b, strong { font-weight: 600; }
 }
 .input::placeholder { color: var(--color-mid-gray); }
 .input:focus { outline: none; background: var(--color-paper); border-color: var(--color-hairline); box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.06); }
-select.input { padding-right: 32px; }
+select.input { padding-right: 32px; min-width: 150px; background-color: var(--color-paper); border-color: var(--color-hairline); cursor: pointer; }
 
 /* ---------- Stat blocks ---------- */
 .kpi-grid {
