@@ -1,10 +1,11 @@
 (function () {
-  const EMPTY = { contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [] };
+  const EMPTY = { contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], ads_period_metrics: [] };
 
   const state = {
     tab: "overview",
     tierFilter: "ALL",
     adFilter: "ALL",
+    period: (() => { try { return Number(localStorage.getItem("TERASEHAT_PERIOD")) || 30; } catch (_) { return 30; } })(),
     data: JSON.parse(JSON.stringify(EMPTY)),
     loading: true
   };
@@ -89,9 +90,60 @@
     document.getElementById("badge-chk-count").textContent = chks.length + " Aktif";
   }
 
+  // PERIODE DATA
+  // Konten organik masuk periode kalau diposting di dalam periode.
+  // Video iklan masuk kalau ada biaya iklan di periode itu (angka iklan diambil dari laporan GMV Max periode tsb).
+  const PERIODS = [[7, "7 hari"], [10, "10 hari"], [30, "30 hari"], [90, "3 bulan"], [180, "6 bulan"]];
+  function periodSelect() {
+    return `<select class="input" id="sel-period" aria-label="Periode data">${PERIODS.map(([d, l]) =>
+      `<option value="${d}" ${state.period === d ? "selected" : ""}>${l} terakhir</option>`).join("")}</select>`;
+  }
+  function periodRows() {
+    const P = state.period;
+    const metrics = {};
+    (state.data.ads_period_metrics || []).forEach(m => { if (Number(m.window_days) === P) metrics[m.item_id] = m; });
+    const hasWindow = Object.keys(metrics).length > 0;
+    const cutoff = new Date(Date.now() + 7 * 3600e3 - P * 86400e3).toISOString().slice(0, 10);
+    const rows = [];
+    (state.data.contents_ads || []).forEach(a => {
+      const m = metrics[a.id];
+      const r = { ...a };
+      if (m) {
+        Object.assign(r, {
+          ad_spend_idr: m.cost, gmv_idr: m.gross_revenue, roas: m.roi, orders: m.orders, ctr_pct: m.ad_click_rate,
+          ad_cvr_pct: m.ad_conversion_rate, hold_2s_pct: m.hold_2s_pct, hold_6s_pct: m.hold_6s_pct,
+          completion_pct: m.completion_pct, ads_period: m.period,
+        });
+        if (Number(m.cost) >= 20000) { r.total_score = m.score; r.rank_tier = m.tier; }
+      } else if (hasWindow && a.source === "gmv_max") {
+        Object.assign(r, { ad_spend_idr: 0, gmv_idr: 0, roas: 0, orders: 0, ctr_pct: 0, hold_2s_pct: 0, hold_6s_pct: 0, completion_pct: 0 });
+      }
+      const posted = a.published_at && a.published_at >= cutoff;
+      const adInPeriod = m ? Number(m.cost) > 0 : (!hasWindow && Number(a.ad_spend_idr || 0) > 0);
+      if (posted || adInPeriod) rows.push(r);
+    });
+    return { rows, hasWindow };
+  }
+  function periodNote(hasWindow) {
+    const label = (PERIODS.find(p => p[0] === state.period) || [0, ""])[1];
+    return hasWindow ? `Periode: ${label} terakhir.`
+      : `Periode: ${label} terakhir. Data iklan untuk periode ini belum ditarik, angka iklan masih pakai laporan 7 hari terakhir.`;
+  }
+  function tiktokUrl(a) {
+    return String(a.video_url || `https://www.tiktok.com/@_/video/${a.id}`).replace("tiktok.com/@/video/", "tiktok.com/@_/video/");
+  }
+  function videoLink(a) {
+    if (!/^\d+$/.test(String(a.id))) return a.script_code ? `<span class="badge badge-purple">${esc(a.script_code)}</span>` : "";
+    return `<a class="badge badge-link" href="${esc(tiktokUrl(a))}" target="_blank" rel="noopener">Buka di TikTok ↗</a>`;
+  }
+  function accountName(a) {
+    return a.creator_name && !["-", "@", ""].includes(a.creator_name) ? `<span class="badge badge-account">${esc(a.creator_name)}</span>` : "";
+  }
+
   // 1. OVERVIEW PIPELINE (Diagram Alur Gambar 2 + KPI Toko Terasehat)
   function renderOverview() {
-    const ads = [...(state.data.contents_ads || [])].sort((a, b) => b.total_score - a.total_score);
+    const { rows: periodAds, hasWindow } = periodRows();
+    const ads = [...periodAds].sort((a, b) => b.total_score - a.total_score);
     const totalGmv = ads.reduce((s, a) => s + Number(a.gmv_idr || 0), 0);
     const totalSpend = ads.reduce((s, a) => s + Number(a.ad_spend_idr || 0), 0);
     const totalOrders = ads.reduce((s, a) => s + Number(a.orders || 0), 0);
@@ -105,12 +157,12 @@
         <div style="flex:1;min-width:240px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <span style="font-weight:600">#${idx + 1}</span>
-            <span class="badge badge-purple">${a.script_code}</span>
             ${tierBadge(a.rank_tier, a.total_score)}
-            <span style="font-size:11.5px;color:var(--teks3)">👤 ${a.creator_name}</span>
+            ${accountName(a)}
+            ${videoLink(a)}
           </div>
-          <div style="font-weight:600;font-size:13.5px;margin-bottom:3px">${a.title}</div>
-          <div style="font-size:12px;color:var(--teks2)">🎙️ Hook 3s: <i>"${a.hook_3s}"</i></div>
+          <div style="font-weight:600;font-size:13.5px;margin-bottom:3px">${esc(a.title)}</div>
+          ${a.hook_3s ? `<div style="font-size:12px;color:var(--teks2)">Hook: <i>"${esc(a.hook_3s)}"</i></div>` : ""}
         </div>
         <div style="text-align:right;min-width:170px">
           <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em">${rp(a.gmv_idr)}</div>
@@ -123,9 +175,10 @@
       <div class="topbar">
         <div>
           <h1>Dashboard</h1>
-          <p>Data Seller Center dan TikTok, dibaca Claude, jadi Visual Guide buat tim kreator.</p>
+          <p>Data Seller Center dan TikTok, dibaca Claude, jadi Visual Guide buat tim kreator. ${periodNote(hasWindow)}</p>
         </div>
         <div class="topbar-actions">
+          ${periodSelect()}
           <button class="btn" id="btn-open-import">Input data Seller Center</button>
           <button class="btn btn-primary" data-go-tab="scripts">Review ${waitingScripts} Visual Guide</button>
         </div>
@@ -168,7 +221,7 @@
 
       <div class="kpi-grid">
         <div class="kpi-card">
-          <div class="kpi-lbl">TOTAL GMV (SELLER CENTER)</div>
+          <div class="kpi-lbl">TOTAL GMV</div>
           <div class="kpi-val" style="color:var(--naik)">${rp(totalGmv)}</div>
           <div class="kpi-sub">📦 <b>${fmt(totalOrders)}</b> pesanan selesai</div>
         </div>
@@ -232,7 +285,7 @@
   }
 
   function renderRanking() {
-    const all = state.data.contents_ads || [];
+    const { rows: all, hasWindow } = periodRows();
     const adFn = (AD_FILTERS.find(f => f[0] === state.adFilter) || AD_FILTERS[0])[2];
     let ads = all.filter(adFn).sort((a, b) =>
       state.adFilter === "ACTIVE" ? Number(b.ad_spend_idr || 0) - Number(a.ad_spend_idr || 0) : b.total_score - a.total_score);
@@ -247,14 +300,12 @@
       <tr>
         <td style="font-weight:700;color:var(--lime)">#${idx + 1}</td>
         <td>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-            ${adBadge(a)}${accountBadge(a)}
-            <span class="badge badge-purple">${esc(a.script_code)}</span>
-            <b style="color:var(--teks)">${esc(a.title)}</b>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">
+            ${adBadge(a)}${accountBadge(a)}${accountName(a)}${videoLink(a)}
           </div>
+          <div style="margin-bottom:3px"><b style="color:var(--teks)">${esc(a.title)}</b>${/^TRS/.test(a.script_code || "") ? ` <span style="font-size:12px;color:var(--teks3)">${esc(a.creative_name || a.script_code)}</span>` : ""}</div>
           ${a.hook_3s ? `<div style="font-size:12px;color:var(--teks2)">Hook: <i>"${esc(a.hook_3s)}"</i></div>` : ""}
           <div style="font-size:12px;color:var(--teks3);margin-top:3px">${[
-            a.creator_name && a.creator_name !== "-" ? esc(a.creator_name) : "",
             a.published_at ? esc(a.published_at) : "",
             Number(a.duration_s) > 0 ? a.duration_s + " detik" : "",
           ].filter(Boolean).join(" · ")}</div>
@@ -276,9 +327,10 @@
       <div class="topbar">
         <div>
           <h1>Ranking Konten & Iklan</h1>
-          <p>Data gabungan TikTok (@terasehat2), Seller Center, dan iklan GMV Max, diurutkan dari skor tertinggi.</p>
+          <p>Data gabungan TikTok (@terasehat2), Seller Center, dan iklan GMV Max, diurutkan dari skor tertinggi. ${periodNote(hasWindow)}</p>
         </div>
         <div class="topbar-actions">
+          ${periodSelect()}
           <select class="input" id="sel-tier-filter">
             <option value="ALL" ${state.tierFilter === "ALL" ? "selected" : ""}>Semua tier</option>
             <option value="WINNING" ${state.tierFilter === "WINNING" ? "selected" : ""}>WINNING (Skor ≥75)</option>
@@ -631,6 +683,12 @@
     const btnImport = document.getElementById("btn-open-import");
     if (btnImport) btnImport.onclick = openImportModal;
 
+    const selPeriod = document.getElementById("sel-period");
+    if (selPeriod) selPeriod.onchange = (e) => {
+      state.period = Number(e.target.value);
+      try { localStorage.setItem("TERASEHAT_PERIOD", String(state.period)); } catch (_) {}
+      render();
+    };
     const selTier = document.getElementById("sel-tier-filter");
     if (selTier) selTier.onchange = (e) => { state.tierFilter = e.target.value; render(); };
     container.querySelectorAll("[data-ad-filter]").forEach(b => {

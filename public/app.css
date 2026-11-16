@@ -317,6 +317,9 @@ select.input { padding-right: 32px; }
 .badge-mid { background: var(--color-canvas); color: var(--color-ink-soft); }    /* soft: POTENSIAL / menunggu */
 .badge-low { background: transparent; color: var(--color-mid-gray); border-color: var(--color-hairline); } /* outline: BONCOS / revisi */
 .badge-purple { background: transparent; color: var(--color-ink); border-color: var(--color-hairline); }
+.badge-account { background: var(--color-canvas); color: var(--color-ink); font-weight: 600; }
+.badge-link { background: transparent; color: var(--color-ink); border-color: var(--color-hairline); text-decoration: none; cursor: pointer; }
+.badge-link:hover { background: var(--color-ink-soft); color: #fafafa; border-color: var(--color-ink-soft); }
 
 /* ---------- Bar chart ---------- */
 .bar-chart {

@@ -2,7 +2,7 @@
 // Dikirim oleh jadwal cloud Claude Brain. item_id = ID postingan TikTok, jadi otomatis
 // nyambung ke video yang sudah di-scrape (contents_ads.id = aweme_id).
 //
-// Body: { period: "2026-11-07..2026-11-13", items: [{ item_id, cost, gross_revenue, roi, orders,
+// Body: { period: "2026-11-07..2026-11-13", window_days?: 7 | 10 | 30 | 90 | 180, items: [{ item_id, cost, gross_revenue, roi, orders,
 //         product_impressions, product_clicks, ad_click_rate, ad_conversion_rate,
 //         ad_video_view_rate_2s, ad_video_view_rate_6s, ad_video_view_rate_p100,
 //         creative_delivery_status?, tt_account_name?, account_type? (OFFICIAL | AFFILIATE), caption?, duration_s? }] }
@@ -28,7 +28,39 @@ export async function onRequestPost({ request, env }) {
     const items = (body.items || []).filter((x) => x && x.item_id && String(x.item_id) !== "-1").slice(0, 200);
     if (!items.length) return Response.json({ ok: false, error: "items kosong" }, { status: 400 });
     const period = String(body.period || "");
+    const windowDays = [7, 10, 30, 90, 180].includes(Number(body.window_days)) ? Number(body.window_days) : 7;
     const avgRev = items.reduce((s, x) => s + n(x.gross_revenue), 0) / items.length;
+
+    // Simpan metrik per jendela waktu (dipakai pilihan periode di dashboard).
+    const periodStmts = items.map((it) => {
+      const { score, tier, roi } = adsScore(it, avgRev);
+      return env.DB.prepare(`
+        INSERT OR REPLACE INTO ads_period_metrics
+          (item_id, window_days, period, cost, gross_revenue, roi, orders, product_impressions, product_clicks,
+           ad_click_rate, ad_conversion_rate, hold_2s_pct, hold_6s_pct, completion_pct, score, tier, updated_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, datetime('now'))
+      `).bind(String(it.item_id), windowDays, period, n(it.cost), n(it.gross_revenue), roi, n(it.orders),
+        n(it.product_impressions), n(it.product_clicks), n(it.ad_click_rate), n(it.ad_conversion_rate),
+        n(it.ad_video_view_rate_2s), n(it.ad_video_view_rate_6s), n(it.ad_video_view_rate_p100), score, tier);
+    });
+    for (let i = 0; i < periodStmts.length; i += 40) await env.DB.batch(periodStmts.slice(i, i + 40));
+
+    // Jendela selain 7 hari cuma memastikan videonya ada di daftar konten; angka 7 hari tidak ditimpa.
+    if (windowDays !== 7) {
+      const ins = items.map((it) => {
+        const id = String(it.item_id);
+        return env.DB.prepare(`
+          INSERT OR IGNORE INTO contents_ads (id, account_type, script_code, title, creator_name, published_at, duration_s,
+            total_score, rank_tier, video_url, source, delivery_status, updated_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, '', ?6, 1, 'BONCOS', ?7, 'gmv_max', ?8, datetime('now'))
+        `).bind(id, ["OFFICIAL", "AFFILIATE", "OWN"].includes(it.account_type) ? it.account_type : "AFFILIATE",
+          "AD-" + id.slice(-4), "[ADS] " + (String(it.caption || "").split("#")[0].trim().slice(0, 90) || "Video " + id),
+          it.tt_account_name ? "@" + String(it.tt_account_name).replace(/^@/, "") : "-", n(it.duration_s),
+          `https://www.tiktok.com/@_/video/${id}`, it.creative_delivery_status ? String(it.creative_delivery_status) : "NOT_IN_REPORT");
+      });
+      for (let i = 0; i < ins.length; i += 40) await env.DB.batch(ins.slice(i, i + 40));
+      return Response.json({ ok: true, count: items.length, period, window_days: windowDays });
+    }
 
     const stmts = items.map((it) => {
       const { score, tier, roi } = adsScore(it, avgRev);
@@ -58,7 +90,7 @@ export async function onRequestPost({ request, env }) {
         id, "AD-" + id.slice(-4), "[ADS] " + (String(it.caption || "").split("#")[0].trim().slice(0, 90) || "Video " + id), n(it.gross_revenue), n(it.orders), n(it.cost), roi,
         n(it.ad_click_rate), n(it.ad_conversion_rate), n(it.product_impressions), n(it.product_clicks),
         n(it.ad_video_view_rate_2s), n(it.ad_video_view_rate_6s), n(it.ad_video_view_rate_p100),
-        score, tier, `https://www.tiktok.com/@/video/${id}`, period,
+        score, tier, `https://www.tiktok.com/@_/video/${id}`, period,
         ["OFFICIAL", "AFFILIATE", "OWN"].includes(it.account_type) ? it.account_type : null,
         it.tt_account_name ? "@" + String(it.tt_account_name).replace(/^@/, "") : "-",
         n(it.duration_s), String(it.caption || "").slice(0, 300),
@@ -74,7 +106,7 @@ export async function onRequestPost({ request, env }) {
       ).bind(...ids).run();
     }
 
-    return Response.json({ ok: true, count: items.length, period });
+    return Response.json({ ok: true, count: items.length, period, window_days: windowDays });
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });
   }

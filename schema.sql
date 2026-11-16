@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS contents_ads (
   source TEXT,              -- tiktok_scrape | seller_center | gmv_max
   account_type TEXT,        -- OWN | OFFICIAL | AFFILIATE
   delivery_status TEXT,     -- status tayang iklan GMV Max (DELIVERING = aktif)
+  enriched_at TEXT,         -- kapan nama akun/caption diambil dari halaman TikTok
   ads_period TEXT,
   product_impressions INTEGER DEFAULT 0,
   product_clicks INTEGER DEFAULT 0,
@@ -112,4 +113,15 @@ CREATE TABLE IF NOT EXISTS competitor_radar (
   ai_takeaway TEXT,
   ref_url TEXT,
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Metrik iklan GMV Max per jendela waktu (lihat migrations/005_ads_period.sql)
+CREATE TABLE IF NOT EXISTS ads_period_metrics (
+  item_id TEXT NOT NULL, window_days INTEGER NOT NULL, period TEXT,
+  cost REAL DEFAULT 0, gross_revenue REAL DEFAULT 0, roi REAL DEFAULT 0, orders INTEGER DEFAULT 0,
+  product_impressions INTEGER DEFAULT 0, product_clicks INTEGER DEFAULT 0,
+  ad_click_rate REAL DEFAULT 0, ad_conversion_rate REAL DEFAULT 0,
+  hold_2s_pct REAL DEFAULT 0, hold_6s_pct REAL DEFAULT 0, completion_pct REAL DEFAULT 0,
+  score INTEGER DEFAULT 0, tier TEXT, updated_at TEXT,
+  PRIMARY KEY (item_id, window_days)
 );
