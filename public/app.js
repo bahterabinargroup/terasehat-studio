@@ -461,7 +461,9 @@
               <div style="font-size:12px;color:var(--lime);margin-top:2px">🧬 Sumber DNA: ${s.based_on_dna}</div>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn btn-primary" style="height:32px;padding:0 12px;font-size:13px" data-script-act="approved" data-idx="${idx}">Approve</button>
+              ${s.human_status === "approved"
+              ? `<button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="waiting_check" data-idx="${idx}">Batalkan approve</button>`
+              : `<button class="btn btn-primary" style="height:32px;padding:0 12px;font-size:13px" data-script-act="approved" data-idx="${idx}">Approve</button>`}
               <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="revision" data-idx="${idx}">Minta revisi</button>
               <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="published" data-idx="${idx}">Sudah tayang</button>
             </div>
@@ -521,7 +523,9 @@
             <div style="font-size:12px;color:var(--lime);margin-top:2px">🧬 Dasar: ${esc(s.based_on_dna)}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-primary" style="height:32px;padding:0 12px;font-size:13px" data-script-act="approved" data-idx="${idx}">Approve</button>
+            ${s.human_status === "approved"
+              ? `<button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="waiting_check" data-idx="${idx}">Batalkan approve</button>`
+              : `<button class="btn btn-primary" style="height:32px;padding:0 12px;font-size:13px" data-script-act="approved" data-idx="${idx}">Approve</button>`}
             <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="revision" data-idx="${idx}">Minta revisi</button>
             <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="published" data-idx="${idx}">Sudah tayang</button>
           </div>
