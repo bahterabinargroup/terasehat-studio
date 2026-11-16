@@ -37,7 +37,7 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
       Kumpulkan `campaign_id` dan `item_group_id` yang `cost` > 0 (dipakai untuk semua jendela).
    2. Untuk TIAP jendela: `tool_execute` → `gmv_max_report_get` dengan tanggal jendela itu,
       `"dimensions": ["item_id"]`, `"filtering": {"campaign_ids": [...], "item_group_ids": [...]}`,
-      `"sort_field": "cost"`, `"page_size": 50`,
+      `"sort_field": "cost"`, `"page_size": 50` (untuk jendela 90 dan 180 pakai `"page_size": 100`),
       `"metrics": ["cost","gross_revenue","roi","orders","product_impressions","product_clicks","ad_click_rate",
       "ad_conversion_rate","ad_video_view_rate_2s","ad_video_view_rate_6s","ad_video_view_rate_p100",
       "creative_delivery_status"]`.

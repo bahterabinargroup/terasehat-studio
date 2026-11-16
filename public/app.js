@@ -100,9 +100,15 @@
   }
   function periodRows() {
     const P = state.period;
+    // Laporan per jendela cuma berisi 50 video dengan biaya terbesar. Kalau video tidak ada di jendela P,
+    // pakai jendela lebih pendek terdekat (biaya di periode panjang minimal sebesar itu).
     const metrics = {};
-    (state.data.ads_period_metrics || []).forEach(m => { if (Number(m.window_days) === P) metrics[m.item_id] = m; });
-    const hasWindow = Object.keys(metrics).length > 0;
+    const byWin = {};
+    (state.data.ads_period_metrics || []).forEach(m => { (byWin[m.window_days] = byWin[m.window_days] || {})[m.item_id] = m; });
+    const hasWindow = !!byWin[P];
+    if (hasWindow) {
+      PERIODS.map(p => p[0]).filter(w => w <= P).forEach(w => Object.assign(metrics, byWin[w] || {}));
+    }
     const cutoff = new Date(Date.now() + 7 * 3600e3 - P * 86400e3).toISOString().slice(0, 10);
     const rows = [];
     (state.data.contents_ads || []).forEach(a => {
