@@ -1,5 +1,5 @@
 (function () {
-  const EMPTY = { contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], ads_period_metrics: [] };
+  const EMPTY = { contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], ads_period_metrics: [], ads_budget: [], ads_daily_spend: [], ads_balance: [] };
 
   const state = {
     tab: "overview",
@@ -146,6 +146,81 @@
     return a.creator_name && !["-", "@", ""].includes(a.creator_name) ? `<span class="badge badge-account">${esc(a.creator_name)}</span>` : "";
   }
 
+  // BUDGET IKLAN: budget harian per kampanye (dari jadwal cloud) dan perkiraan saldo akun (saldo diisi manual).
+  const todayWib = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+  function budgetStatus() {
+    const today = todayWib();
+    const camps = (state.data.ads_budget || []).filter(c => c.stat_date === today && c.operation_status === "ENABLE" && Number(c.daily_budget) > 0)
+      .map(c => ({ ...c, pct: Number(c.spend_today) / Number(c.daily_budget) }));
+    const daily = state.data.ads_daily_spend || [];
+    const past = daily.filter(d => d.date < today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
+    const avg = past.length ? past.reduce((s, d) => s + Number(d.cost || 0), 0) / past.length : 0;
+    const bal = (state.data.ads_balance || [])[0];
+    let balance = null;
+    if (bal && bal.set_date) {
+      const used = daily.filter(d => d.date >= bal.set_date).reduce((s, d) => s + Number(d.cost || 0), 0) - Number(bal.spend_at_set || 0);
+      const est = Number(bal.balance_idr || 0) - Math.max(0, used);
+      balance = { ...bal, est, used: Math.max(0, used), daysLeft: avg > 0 ? est / avg : null };
+    }
+    const alerts = [];
+    camps.forEach(c => {
+      const more = c.auto_budget && Number(c.max_budget) > Number(c.daily_budget) ? ` Auto-budget aktif, bisa naik sendiri sampai ${rp(c.max_budget)}.` : "";
+      if (c.pct >= 0.98) alerts.push({ level: "danger", text: `Budget harian <b>${esc(c.campaign_name)}</b> habis: ${rp(c.spend_today)} dari ${rp(c.daily_budget)}. Iklan berhenti tayang sampai besok.${more}` });
+      else if (c.pct >= 0.8) alerts.push({ level: "warn", text: `Budget harian <b>${esc(c.campaign_name)}</b> tinggal ${rp(c.daily_budget - c.spend_today)} (${Math.round(c.pct * 100)}% terpakai).${more}` });
+    });
+    if (balance) {
+      if (balance.est <= 0) alerts.unshift({ level: "danger", text: `Saldo iklan kemungkinan <b>sudah habis</b> (perkiraan ${rp(balance.est)}). Cek dan top-up di TikTok Ads, lalu update saldo di Dashboard.` });
+      else if (balance.daysLeft !== null && balance.daysLeft < Number(balance.warn_days || 3))
+        alerts.unshift({ level: balance.daysLeft < 1 ? "danger" : "warn", text: `Saldo iklan tinggal sekitar <b>${rp(balance.est)}</b>, cukup ±${balance.daysLeft < 1 ? "kurang dari 1" : balance.daysLeft.toFixed(1)} hari lagi (spend rata-rata ${rp(Math.round(avg))}/hari).` });
+    }
+    const checked = (state.data.ads_budget || []).map(c => c.checked_at).sort().pop() || "";
+    return { camps, avg, balance, alerts, checked, today };
+  }
+  function budgetBanner() {
+    const { alerts } = budgetStatus();
+    if (!alerts.length) return "";
+    return `<div class="alert-stack">${alerts.map(a => `
+      <div class="alert-banner ${a.level === "danger" ? "alert-danger" : ""}">
+        <span class="alert-dot"></span><div style="flex:1">${a.text}</div>
+        ${state.tab !== "overview" ? `<button class="btn" style="height:28px;padding:0 10px;font-size:12px" data-go-tab="overview">Lihat budget</button>` : ""}
+      </div>`).join("")}</div>`;
+  }
+  function budgetCard() {
+    const { camps, avg, balance, checked } = budgetStatus();
+    const rows = camps.map(c => `
+      <div class="budget-row">
+        <div style="flex:1;min-width:160px">
+          <div style="font-weight:600;font-size:13.5px">${esc(c.campaign_name)}</div>
+          <div style="font-size:12px;color:var(--teks2)">${rp(c.spend_today)} dari ${rp(c.daily_budget)}${c.auto_budget ? ` • auto-budget s/d ${rp(c.max_budget)}` : ""} • omzet ${rp(c.revenue_today)}</div>
+        </div>
+        <div class="budget-bar"><span style="width:${Math.min(100, Math.round(c.pct * 100))}%;${c.pct >= 0.98 ? "background:var(--merah)" : ""}"></span></div>
+        <div style="width:44px;text-align:right;font-weight:600;font-size:13px;${c.pct >= 0.98 ? "color:var(--merah)" : ""}">${Math.round(c.pct * 100)}%</div>
+      </div>`).join("");
+    const balHtml = balance
+      ? `<div style="font-size:20px;font-weight:600;letter-spacing:-0.01em;${balance.est <= 0 ? "color:var(--merah)" : ""}">${rp(Math.round(balance.est))}</div>
+         <div style="font-size:12px;color:var(--teks2)">Perkiraan. Diisi ${rp(balance.balance_idr)} tanggal ${esc(balance.set_date)}, sudah terpakai ${rp(Math.round(balance.used))}.
+         ${balance.daysLeft !== null ? `Cukup ±${Math.max(0, balance.daysLeft).toFixed(1)} hari.` : ""} Peringatan muncul kalau sisa &lt; ${fmt(balance.warn_days)} hari.</div>`
+      : `<div style="font-size:13px;color:var(--teks2)">Saldo belum diisi. API TikTok tidak memberikan saldo GMV Max, jadi isi sekali dari TikTok Ads Manager. Setelah itu dashboard menguranginya otomatis dengan spend harian.</div>`;
+    return `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <h3 style="margin:0">Budget iklan hari ini</h3>
+          <span style="font-size:12px;color:var(--teks2)">${checked ? "Dicek " + esc(checked.replace("T", " ").slice(0, 16)) + " UTC • dicek ulang jam 06, 12, 18, 21 WIB" : "Belum ada data. Terisi setelah jadwal cloud berikutnya."}</span>
+        </div>
+        ${rows || `<div style="font-size:13px;color:var(--teks2);margin-bottom:8px">Belum ada data budget kampanye aktif untuk hari ini.</div>`}
+        <div class="budget-balance">
+          <div style="flex:1;min-width:220px">
+            <div class="kpi-lbl">SALDO AKUN IKLAN</div>
+            ${balHtml}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+            <button class="btn" id="btn-set-balance">${balance ? "Update saldo" : "Isi saldo"}</button>
+            ${avg ? `<span style="font-size:12px;color:var(--teks2)">Spend rata-rata 7 hari: ${rp(Math.round(avg))}/hari</span>` : ""}
+          </div>
+        </div>
+      </div>`;
+  }
+
   // 1. OVERVIEW PIPELINE (Diagram Alur Gambar 2 + KPI Toko Terasehat)
   function renderOverview() {
     const { rows: periodAds, hasWindow } = periodRows();
@@ -188,6 +263,8 @@
           <button class="btn btn-primary" data-go-tab="scripts">Review ${waitingScripts} Visual Guide</button>
         </div>
       </div>
+
+      ${budgetCard()}
 
       <!-- Visualisasi Alur Closed-Loop Sesuai Gambar 2 -->
       <div class="card" style="background:var(--color-surface-alt)">
@@ -615,6 +692,7 @@
     else if (state.tab === "scripts") container.innerHTML = renderScripts();
     else if (state.tab === "checklist") container.innerHTML = renderChecklist();
     else if (state.tab === "radar") container.innerHTML = renderRadar();
+    if (!state.loading) container.insertAdjacentHTML("afterbegin", budgetBanner());
     if (state.loading || state.error) {
       container.insertAdjacentHTML("afterbegin", `<div class="card" style="margin-bottom:12px;color:${state.error ? "var(--color-ember)" : "var(--color-mid-gray)"}">${state.error ? "⚠️ Gagal ambil data: " + esc(state.error) + ` <button class="btn" id="btn-reload" style="margin-left:8px">Coba lagi</button>` : "Memuat data dari database..."}</div>`);
       const r = document.getElementById("btn-reload");
@@ -672,6 +750,21 @@
         } catch (err) { e.target.checked = !e.target.checked; alert("Gagal simpan: " + err.message); }
       };
     });
+
+    const btnBal = document.getElementById("btn-set-balance");
+    if (btnBal) btnBal.onclick = async () => {
+      const cur = (state.data.ads_balance || [])[0];
+      const v = window.prompt("Saldo akun iklan sekarang (Rupiah, lihat di TikTok Ads Manager):", cur ? String(Math.round(cur.balance_idr)) : "");
+      if (v === null) return;
+      const bal = Number(String(v).replace(/[^\d]/g, ""));
+      if (!String(v).trim() || !Number.isFinite(bal)) { alert("Isi angka saldo, contoh 500000"); return; }
+      const w = window.prompt("Kasih peringatan kalau saldo cukup kurang dari berapa hari?", String(cur ? cur.warn_days : 3));
+      if (w === null) return;
+      try {
+        await api("/api/update", { type: "ads_balance", balance_idr: bal, warn_days: Number(w) || 3 });
+        await loadState();
+      } catch (e) { alert("Gagal simpan: " + e.message); }
+    };
 
     const btnSelfLearn = document.getElementById("btn-run-self-learning");
     if (btnSelfLearn) {

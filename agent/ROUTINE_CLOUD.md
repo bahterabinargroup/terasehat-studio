@@ -65,6 +65,28 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
       ```
    Kalau connector tidak tersedia atau error izin, lewati dan catat di laporan akhir.
 
+1c. **Pantau budget iklan** — jalankan di SETIAP jadwal (bukan cuma 06:00), biar peringatan "budget mau habis" di dashboard selalu baru.
+   Pakai connector TikTok for Business. `T` = tanggal hari ini (WIB), format `YYYY-MM-DD`.
+   1. `gmv_max_campaign_get` (params sama seperti 1b.1). Ambil kampanye dengan `operation_status` = `"ENABLE"`.
+      Kalau langkah 1b sudah jalan di jadwal ini, pakai hasil yang sama.
+   2. Untuk tiap kampanye aktif: `tool_execute` → `campaign_gmv_max_info_get` params `{"advertiser_id": ADV, "campaign_id": ID}`.
+      `daily_budget` = `auto_budget.current_budget` kalau `auto_budget_enabled` true, selain itu `budget`.
+      `auto_budget` = `auto_budget_enabled`, `max_budget` = `auto_budget.maximum_budget` (0 kalau tidak ada).
+   3. Spend hari ini per kampanye: `gmv_max_report_get` params `{"advertiser_id": ADV, "store_ids": [STORE],
+      "start_date": T, "end_date": T, "dimensions": ["campaign_id"], "metrics": ["cost","gross_revenue"], "page_size": 100,
+      "filtering": {"campaign_ids": [semua kampanye aktif]}}`.
+   4. Spend total akun per hari (14 hari terakhir sampai T): `gmv_max_report_get` dengan
+      `"dimensions": ["advertiser_id","stat_time_day"]`, `"metrics": ["cost","gross_revenue"]`,
+      `"filtering": {"campaign_ids": [SEMUA campaign_id, termasuk yang mati]}`.
+   5. Tulis `/tmp/budget.json` = `{"stat_date": T, "campaigns": [{"campaign_id", "campaign_name", "operation_status",
+      "daily_budget", "auto_budget", "max_budget", "spend_today", "revenue_today"}], "daily": [{"date": "YYYY-MM-DD", "cost", "gross_revenue"}]}`,
+      lalu kirim:
+      ```bash
+      curl -sS -X POST "$DASHBOARD_URL/api/budget-sync" -H "content-type: application/json" \
+        -H "x-pipeline-secret: $PIPELINE_SECRET" --data-binary @/tmp/budget.json
+      ```
+   Di laporan akhir sebut kampanye yang spend-nya sudah ≥ 80% budget harian.
+
 1d. **Lengkapi nama akun, caption, dan tanggal video** (gratis, dibaca dashboard dari halaman TikTok). Jalankan tiap jadwal:
    ```bash
    curl -sS -X POST "$DASHBOARD_URL/api/enrich" -H "content-type: application/json" \
@@ -95,4 +117,4 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
 
 6. **Jangan** commit, push, atau mengubah file di repo.
 
-7. **Laporan akhir** (singkat): status scrape, status iklan (jumlah video iklan terkirim atau "dilewati"), jumlah DNA / Visual Guide / evaluasi / checklist yang terkirim, dan error kalau ada.
+7. **Laporan akhir** (singkat): status scrape, status iklan (jumlah video iklan terkirim atau "dilewati"), status budget (kampanye yang hampir habis), jumlah DNA / Visual Guide / evaluasi / checklist yang terkirim, dan error kalau ada.

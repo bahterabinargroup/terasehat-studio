@@ -458,3 +458,19 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
   color: var(--color-ink-soft);
 }
 .seg-btn.active .seg-count { background: #262626; color: #fafafa; }
+
+/* Peringatan budget iklan */
+.alert-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.alert-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: var(--radius-nested);
+  background: var(--color-paper); border: 1px solid var(--color-hairline);
+  font-size: 13.5px; box-shadow: var(--shadow-card);
+}
+.alert-banner .alert-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-mid-gray); flex: none; }
+.alert-danger { border-color: var(--color-ember); }
+.alert-danger .alert-dot { background: var(--color-ember); }
+.budget-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--color-hairline); flex-wrap: wrap; }
+.budget-bar { flex: 0 1 220px; min-width: 120px; height: 8px; background: var(--color-canvas); border-radius: 99px; overflow: hidden; }
+.budget-bar span { display: block; height: 100%; background: var(--color-ink); border-radius: 99px; }
+.budget-balance { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding-top: 14px; }
