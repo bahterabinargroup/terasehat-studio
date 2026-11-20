@@ -1,24 +1,30 @@
-export async function onRequestGet(context) {
-  const { env } = context;
-  if (!env.DB) {
-    return Response.json({ ok: true, mode: "seed_fallback", message: "D1 belum terhubung, menggunakan seed data lokal." });
-  }
+// Semua data dashboard dalam satu panggilan, sudah dibatasi ke toko yang boleh dilihat user.
+import { storeList, publicUser } from "../../lib/auth.js";
+
+export async function onRequestGet({ env, data }) {
   try {
-    const [ads, dna, scripts, checklist, radar, adsPeriod, budget, daily, balance] = await Promise.all([
-      env.DB.prepare("SELECT * FROM contents_ads ORDER BY total_score DESC, gmv_idr DESC").all(),
-      env.DB.prepare("SELECT * FROM winning_dna ORDER BY confidence_score DESC").all(),
-      env.DB.prepare("SELECT * FROM scripts_briefs ORDER BY created_at DESC").all(),
-      env.DB.prepare("SELECT * FROM daily_checklists ORDER BY date DESC, is_done ASC, id ASC LIMIT 80").all(),
-      env.DB.prepare("SELECT * FROM competitor_radar ORDER BY created_at DESC").all(),
-      env.DB.prepare("SELECT * FROM ads_period_metrics").all(),
-      env.DB.prepare("SELECT * FROM ads_budget ORDER BY spend_today DESC").all(),
-      env.DB.prepare("SELECT * FROM ads_daily_spend ORDER BY date DESC LIMIT 60").all(),
-      env.DB.prepare("SELECT * FROM ads_balance").all()
+    const allowed = storeList(data.user); // null = semua toko
+    const where = (col = "store_code") => allowed === null ? "" : `WHERE ${col} IN (${allowed.map(() => "?").join(",") || "''"})`;
+    const q = (sql) => { const st = env.DB.prepare(sql); return allowed && allowed.length ? st.bind(...allowed) : st; };
+
+    const [stores, ads, dna, scripts, checklist, radar, adsPeriod, budget, daily, balance] = await Promise.all([
+      q(`SELECT code, name, tiktok_handles, advertiser_id, store_id, sort FROM stores ${where("code")} ORDER BY sort`).all(),
+      q(`SELECT * FROM contents_ads ${where()} ORDER BY total_score DESC, gmv_idr DESC`).all(),
+      q(`SELECT * FROM winning_dna ${where()} ORDER BY confidence_score DESC`).all(),
+      q(`SELECT * FROM scripts_briefs ${where()} ORDER BY created_at DESC`).all(),
+      q(`SELECT * FROM daily_checklists ${where()} ORDER BY date DESC, is_done ASC, id ASC LIMIT 200`).all(),
+      q(`SELECT * FROM competitor_radar ${where()} ORDER BY created_at DESC`).all(),
+      q(`SELECT * FROM ads_period_metrics ${where()}`).all(),
+      q(`SELECT * FROM ads_budget ${where()} ORDER BY spend_today DESC`).all(),
+      q(`SELECT * FROM ads_daily_spend ${where()} ORDER BY date DESC LIMIT 400`).all(),
+      q(`SELECT * FROM ads_balance ${where()}`).all(),
     ]);
 
     return Response.json({
       ok: true,
       mode: "d1_live",
+      user: publicUser(data.user),
+      stores: (stores.results || []).map((s) => ({ ...s, tiktok_handles: JSON.parse(s.tiktok_handles || "[]") })),
       contents_ads: ads.results || [],
       winning_dna: dna.results || [],
       scripts_briefs: scripts.results || [],
@@ -27,7 +33,7 @@ export async function onRequestGet(context) {
       ads_period_metrics: adsPeriod.results || [],
       ads_budget: budget.results || [],
       ads_daily_spend: daily.results || [],
-      ads_balance: balance.results || []
+      ads_balance: balance.results || [],
     });
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });

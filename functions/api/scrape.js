@@ -11,6 +11,16 @@ export async function onRequestPost(context) {
     const handle = (body.handle || "terasehat2").replace(/^@/, "").trim();
     const keyword = (body.keyword || "herbal kesehatan").trim();
     const apiKey = env.SCRAPECREATORS_API_KEY;
+    // Toko pemilik akun TikTok ini (dari body, atau dicari di tabel stores). Data scrape hanya masuk ke toko itu.
+    let storeCode = String(body.store_code || "").toUpperCase();
+    if (!storeCode && env.DB) {
+      const rows = (await env.DB.prepare("SELECT code, tiktok_handles FROM stores").all()).results || [];
+      const hit = rows.find((r) => JSON.parse(r.tiktok_handles || "[]").map((h) => String(h).toLowerCase()).includes(handle.toLowerCase()));
+      storeCode = hit ? hit.code : "";
+    }
+    if (!storeCode && (body.mode || "tiktok_account") === "tiktok_account") {
+      return Response.json({ ok: false, error: `Akun @${handle} belum terdaftar di toko mana pun (tabel stores).` }, { status: 400 });
+    }
 
     if (!apiKey) {
       return Response.json({ ok: false, error: "SCRAPECREATORS_API_KEY belum diset di environment Cloudflare." }, { status: 503 });
@@ -104,8 +114,8 @@ export async function onRequestPost(context) {
           await env.DB.prepare(`
             INSERT INTO contents_ads
             (id, account_type, script_code, creative_name, title, creator_name, published_at, duration_s, views, likes, comments, shares, saves,
-             er_pct, outlier_score, hook_3s, transcript_full, total_score, rank_tier, video_url, updated_at)
-            VALUES (?1, 'OWN', ?2, ?3, ?4, ?19, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, datetime('now'))
+             er_pct, outlier_score, hook_3s, transcript_full, total_score, rank_tier, video_url, source, store_code, updated_at)
+            VALUES (?1, 'OWN', ?2, ?3, ?4, ?19, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, 'tiktok_scrape', ?20, datetime('now'))
             ON CONFLICT(id) DO UPDATE SET
               script_code = excluded.script_code, creative_name = excluded.creative_name,
               title = excluded.title, duration_s = excluded.duration_s,
@@ -115,11 +125,12 @@ export async function onRequestPost(context) {
               transcript_full = CASE WHEN excluded.transcript_full != '' THEN excluded.transcript_full ELSE contents_ads.transcript_full END,
               total_score = CASE WHEN contents_ads.gmv_idr > 0 THEN contents_ads.total_score ELSE excluded.total_score END,
               rank_tier = CASE WHEN contents_ads.gmv_idr > 0 THEN contents_ads.rank_tier ELSE excluded.rank_tier END,
-              video_url = excluded.video_url, account_type = COALESCE(contents_ads.account_type, 'OWN'), updated_at = datetime('now')
+              video_url = excluded.video_url, account_type = COALESCE(contents_ads.account_type, 'OWN'),
+              store_code = COALESCE(contents_ads.store_code, excluded.store_code), updated_at = datetime('now')
           `).bind(
             String(it.id), it.script_code, it.creative_name, it.title, it.published_at, it.duration_s,
             it.views, it.likes, it.comments, it.shares, it.saves, it.er_pct, it.outlier_score,
-            it.hook_3s, it.transcript_full, it.total_score, it.rank_tier, it.video_url, it.creator_name
+            it.hook_3s, it.transcript_full, it.total_score, it.rank_tier, it.video_url, it.creator_name, storeCode
           ).run();
         }
       }
@@ -127,6 +138,7 @@ export async function onRequestPost(context) {
       return Response.json({
         ok: true,
         handle,
+        store_code: storeCode,
         credits_remaining: vids.credits_remaining,
         items
       });

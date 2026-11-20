@@ -6,34 +6,30 @@
     tierFilter: "ALL",
     adFilter: "ALL",
     period: (() => { try { return Number(localStorage.getItem("TERASEHAT_PERIOD")) || 30; } catch (_) { return 30; } })(),
+    store: (() => { try { return localStorage.getItem("TERASEHAT_STORE") || "ALL"; } catch (_) { return "ALL"; } })(),
+    raw: JSON.parse(JSON.stringify(EMPTY)),
     data: JSON.parse(JSON.stringify(EMPTY)),
+    stores: [],
+    user: null,
+    auth: "checking", // checking | login | change | ok
+    users: null,
+    flash: "",
     loading: true
   };
 
-  // Data dulu disimpan di browser; sekarang selalu dari database Cloudflare D1.
-  try { localStorage.removeItem("TERASEHAT_STATE_V1"); } catch (_) {}
-  function persist() {}
-
-  function getSecret() {
-    try { return localStorage.getItem("TERASEHAT_SECRET") || ""; } catch (_) { return ""; }
-  }
-  function askSecret(msg) {
-    const v = window.prompt(msg || "Masukkan kode akses dashboard Terasehat:");
-    if (v) { try { localStorage.setItem("TERASEHAT_SECRET", v.trim()); } catch (_) {} }
-    return v;
-  }
+  // Kode akses lama (satu kode untuk semua) sudah diganti login per user.
+  try { localStorage.removeItem("TERASEHAT_STATE_V1"); localStorage.removeItem("TERASEHAT_SECRET"); } catch (_) {}
 
   async function api(path, body) {
     const res = await fetch(path, {
       method: body ? "POST" : "GET",
-      headers: { "content-type": "application/json", "x-pipeline-secret": getSecret() },
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
       body: body ? JSON.stringify(body) : undefined
     });
-    if (res.status === 401) {
-      if (askSecret("Kode akses salah atau belum diisi. Masukkan kode akses dashboard:")) return api(path, body);
-      throw new Error("Kode akses diperlukan");
-    }
     const json = await res.json().catch(() => ({}));
+    if (res.status === 401 && json.login) { state.auth = "login"; render(); throw new Error("Silakan login dulu"); }
+    if (res.status === 403 && json.must_change) { state.auth = "change"; render(); throw new Error(json.error); }
     if (!res.ok || json.ok === false) throw new Error(json.error || ("HTTP " + res.status));
     return json;
   }
@@ -43,15 +39,34 @@
     try { const p = JSON.parse(v || "[]"); return Array.isArray(p) ? p : []; } catch (_) { return []; }
   }
 
+  // TOKO: data mentah berisi semua toko yang boleh dilihat user; state.data = toko yang sedang dipilih.
+  const isManager = () => state.user && ["owner", "spv"].includes(state.user.role);
+  const storeName = (code) => (state.stores.find(s => s.code === code) || {}).name || code || "-";
+  function dataFor(code) {
+    const out = {};
+    Object.keys(EMPTY).forEach(k => { out[k] = code === "ALL" ? (state.raw[k] || []) : (state.raw[k] || []).filter(r => r.store_code === code); });
+    return out;
+  }
+  function applyStore() {
+    const codes = state.stores.map(s => s.code);
+    if (state.store !== "ALL" && !codes.includes(state.store)) state.store = codes.length === 1 ? codes[0] : "ALL";
+    if (state.store === "ALL" && codes.length === 1) state.store = codes[0];
+    state.data = dataFor(state.store);
+  }
+  const visibleStores = () => state.store === "ALL" ? state.stores : state.stores.filter(s => s.code === state.store);
+
   async function loadState() {
     state.loading = true;
     try {
-      if (!getSecret()) askSecret();
       const d = await api("/api/state");
-      Object.keys(EMPTY).forEach(k => { state.data[k] = d[k] || []; });
+      state.user = d.user;
+      state.stores = d.stores || [];
+      Object.keys(EMPTY).forEach(k => { state.raw[k] = d[k] || []; });
+      applyStore();
+      state.auth = "ok";
       state.error = "";
     } catch (e) {
-      state.error = e.message;
+      if (state.auth === "ok" || state.auth === "checking") state.error = e.message;
     }
     state.loading = false;
     render();
@@ -98,20 +113,21 @@
     return `<select class="input" id="sel-period" aria-label="Periode data">${PERIODS.map(([d, l]) =>
       `<option value="${d}" ${state.period === d ? "selected" : ""}>${l} terakhir</option>`).join("")}</select>`;
   }
-  function periodRows() {
+  function periodRows(src) {
+    const D = src || state.data;
     const P = state.period;
     // Laporan per jendela cuma berisi 50 video dengan biaya terbesar. Kalau video tidak ada di jendela P,
     // pakai jendela lebih pendek terdekat (biaya di periode panjang minimal sebesar itu).
     const metrics = {};
     const byWin = {};
-    (state.data.ads_period_metrics || []).forEach(m => { (byWin[m.window_days] = byWin[m.window_days] || {})[m.item_id] = m; });
+    (D.ads_period_metrics || []).forEach(m => { (byWin[m.window_days] = byWin[m.window_days] || {})[m.item_id] = m; });
     const hasWindow = !!byWin[P];
     if (hasWindow) {
       PERIODS.map(p => p[0]).filter(w => w <= P).forEach(w => Object.assign(metrics, byWin[w] || {}));
     }
     const cutoff = new Date(Date.now() + 7 * 3600e3 - P * 86400e3).toISOString().slice(0, 10);
     const rows = [];
-    (state.data.contents_ads || []).forEach(a => {
+    (D.contents_ads || []).forEach(a => {
       const m = metrics[a.id];
       const r = { ...a };
       if (m) {
@@ -146,38 +162,41 @@
     return a.creator_name && !["-", "@", ""].includes(a.creator_name) ? `<span class="badge badge-account">${esc(a.creator_name)}</span>` : "";
   }
 
-  // BUDGET IKLAN: budget harian per kampanye (dari jadwal cloud) dan perkiraan saldo akun (saldo diisi manual).
+  // BUDGET IKLAN per toko: budget harian per kampanye (dari jadwal cloud) dan perkiraan saldo (saldo diisi manual).
   const todayWib = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
-  function budgetStatus() {
+  function budgetStatus(code) {
+    const D = dataFor(code);
     const today = todayWib();
-    const camps = (state.data.ads_budget || []).filter(c => c.stat_date === today && c.operation_status === "ENABLE" && Number(c.daily_budget) > 0)
+    const camps = (D.ads_budget || []).filter(c => c.stat_date === today && c.operation_status === "ENABLE" && Number(c.daily_budget) > 0)
       .map(c => ({ ...c, pct: Number(c.spend_today) / Number(c.daily_budget) }));
-    const daily = state.data.ads_daily_spend || [];
+    const daily = D.ads_daily_spend || [];
     const past = daily.filter(d => d.date < today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
     const avg = past.length ? past.reduce((s, d) => s + Number(d.cost || 0), 0) / past.length : 0;
-    const bal = (state.data.ads_balance || [])[0];
+    const bal = (D.ads_balance || [])[0];
     let balance = null;
     if (bal && bal.set_date) {
       const used = daily.filter(d => d.date >= bal.set_date).reduce((s, d) => s + Number(d.cost || 0), 0) - Number(bal.spend_at_set || 0);
       const est = Number(bal.balance_idr || 0) - Math.max(0, used);
       balance = { ...bal, est, used: Math.max(0, used), daysLeft: avg > 0 ? est / avg : null };
     }
+    const prefix = state.stores.length > 1 ? `<b>${esc(storeName(code))}</b> · ` : "";
     const alerts = [];
     camps.forEach(c => {
       const more = c.auto_budget && Number(c.max_budget) > Number(c.daily_budget) ? ` Auto-budget aktif, bisa naik sendiri sampai ${rp(c.max_budget)}.` : "";
-      if (c.pct >= 0.98) alerts.push({ level: "danger", text: `Budget harian <b>${esc(c.campaign_name)}</b> habis: ${rp(c.spend_today)} dari ${rp(c.daily_budget)}. Iklan berhenti tayang sampai besok.${more}` });
-      else if (c.pct >= 0.8) alerts.push({ level: "warn", text: `Budget harian <b>${esc(c.campaign_name)}</b> tinggal ${rp(c.daily_budget - c.spend_today)} (${Math.round(c.pct * 100)}% terpakai).${more}` });
+      if (c.pct >= 0.98) alerts.push({ level: "danger", text: `${prefix}Budget harian <b>${esc(c.campaign_name)}</b> habis: ${rp(c.spend_today)} dari ${rp(c.daily_budget)}. Iklan berhenti tayang sampai besok.${more}` });
+      else if (c.pct >= 0.8) alerts.push({ level: "warn", text: `${prefix}Budget harian <b>${esc(c.campaign_name)}</b> tinggal ${rp(c.daily_budget - c.spend_today)} (${Math.round(c.pct * 100)}% terpakai).${more}` });
     });
     if (balance) {
-      if (balance.est <= 0) alerts.unshift({ level: "danger", text: `Saldo iklan kemungkinan <b>sudah habis</b> (perkiraan ${rp(balance.est)}). Cek dan top-up di TikTok Ads, lalu update saldo di Dashboard.` });
+      if (balance.est <= 0) alerts.unshift({ level: "danger", text: `${prefix}Saldo iklan kemungkinan <b>sudah habis</b> (perkiraan ${rp(balance.est)}). Cek dan top-up di TikTok Ads, lalu update saldo di Dashboard.` });
       else if (balance.daysLeft !== null && balance.daysLeft < Number(balance.warn_days || 3))
-        alerts.unshift({ level: balance.daysLeft < 1 ? "danger" : "warn", text: `Saldo iklan tinggal sekitar <b>${rp(balance.est)}</b>, cukup ±${balance.daysLeft < 1 ? "kurang dari 1" : balance.daysLeft.toFixed(1)} hari lagi (spend rata-rata ${rp(Math.round(avg))}/hari).` });
+        alerts.unshift({ level: balance.daysLeft < 1 ? "danger" : "warn", text: `${prefix}Saldo iklan tinggal sekitar <b>${rp(balance.est)}</b>, cukup ±${balance.daysLeft < 1 ? "kurang dari 1" : balance.daysLeft.toFixed(1)} hari lagi (spend rata-rata ${rp(Math.round(avg))}/hari).` });
     }
-    const checked = (state.data.ads_budget || []).map(c => c.checked_at).sort().pop() || "";
-    return { camps, avg, balance, alerts, checked, today };
+    const checked = (D.ads_budget || []).map(c => c.checked_at).sort().pop() || "";
+    const hasAds = !!(state.stores.find(s => s.code === code) || {}).advertiser_id || camps.length > 0 || daily.length > 0;
+    return { code, camps, avg, balance, alerts, checked, today, hasAds };
   }
   function budgetBanner() {
-    const { alerts } = budgetStatus();
+    const alerts = visibleStores().flatMap(s => budgetStatus(s.code).alerts);
     if (!alerts.length) return "";
     return `<div class="alert-stack">${alerts.map(a => `
       <div class="alert-banner ${a.level === "danger" ? "alert-danger" : ""}">
@@ -185,8 +204,11 @@
         ${state.tab !== "overview" ? `<button class="btn" style="height:28px;padding:0 10px;font-size:12px" data-go-tab="overview">Lihat budget</button>` : ""}
       </div>`).join("")}</div>`;
   }
-  function budgetCard() {
-    const { camps, avg, balance, checked } = budgetStatus();
+  function budgetSection(code, withName) {
+    const { camps, avg, balance, checked, hasAds } = budgetStatus(code);
+    if (!hasAds) return withName ? `
+      <div class="budget-store"><div class="budget-store-hd"><b>${esc(storeName(code))}</b></div>
+        <div style="font-size:13px;color:var(--teks2)">Akun iklan toko ini belum tersambung ke dashboard.</div></div>` : "";
     const rows = camps.map(c => `
       <div class="budget-row">
         <div style="flex:1;min-width:160px">
@@ -202,11 +224,8 @@
          ${balance.daysLeft !== null ? `Cukup ±${Math.max(0, balance.daysLeft).toFixed(1)} hari.` : ""} Peringatan muncul kalau sisa &lt; ${fmt(balance.warn_days)} hari.</div>`
       : `<div style="font-size:13px;color:var(--teks2)">Saldo belum diisi. API TikTok tidak memberikan saldo GMV Max, jadi isi sekali dari TikTok Ads Manager. Setelah itu dashboard menguranginya otomatis dengan spend harian.</div>`;
     return `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <h3 style="margin:0">Budget iklan hari ini</h3>
-          <span style="font-size:12px;color:var(--teks2)">${checked ? "Dicek " + esc(checked.replace("T", " ").slice(0, 16)) + " UTC • dicek ulang jam 06, 12, 18, 21 WIB" : "Belum ada data. Terisi setelah jadwal cloud berikutnya."}</span>
-        </div>
+      <div class="budget-store">
+        ${withName ? `<div class="budget-store-hd"><b>${esc(storeName(code))}</b><span>${checked ? "Dicek " + esc(checked.slice(0, 16)) + " UTC" : ""}</span></div>` : ""}
         ${rows || `<div style="font-size:13px;color:var(--teks2);margin-bottom:8px">Belum ada data budget kampanye aktif untuk hari ini.</div>`}
         <div class="budget-balance">
           <div style="flex:1;min-width:220px">
@@ -214,11 +233,224 @@
             ${balHtml}
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-            <button class="btn" id="btn-set-balance">${balance ? "Update saldo" : "Isi saldo"}</button>
+            <button class="btn" data-set-balance="${esc(code)}">${balance ? "Update saldo" : "Isi saldo"}</button>
             ${avg ? `<span style="font-size:12px;color:var(--teks2)">Spend rata-rata 7 hari: ${rp(Math.round(avg))}/hari</span>` : ""}
           </div>
         </div>
       </div>`;
+  }
+  function budgetCard() {
+    const stores = visibleStores();
+    const multi = stores.length > 1;
+    const first = budgetStatus(stores[0] ? stores[0].code : "");
+    const body = stores.map(s => budgetSection(s.code, multi)).join("");
+    if (!body.trim()) return `<div class="card"><h3 style="margin:0 0 6px">Budget iklan hari ini</h3><div style="font-size:13px;color:var(--teks2)">Akun iklan toko ini belum tersambung ke dashboard.</div></div>`;
+    return `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <h3 style="margin:0">Budget iklan hari ini</h3>
+          <span style="font-size:12px;color:var(--teks2)">${!multi && first.checked ? "Dicek " + esc(first.checked.slice(0, 16)) + " UTC • " : ""}dicek ulang jam 06, 12, 18, 21 WIB</span>
+        </div>
+        ${body}
+      </div>`;
+  }
+
+  // PERBANDINGAN AKUN (owner, spv, dan adv yang pegang lebih dari 1 toko)
+  function storeSummary(code) {
+    const D = dataFor(code);
+    const { rows } = periodRows(D);
+    const gmv = rows.reduce((s, a) => s + Number(a.gmv_idr || 0), 0);
+    const spend = rows.reduce((s, a) => s + Number(a.ad_spend_idr || 0), 0);
+    const orders = rows.reduce((s, a) => s + Number(a.orders || 0), 0);
+    const organic = rows.filter(a => a.source !== "gmv_max");
+    const views = organic.reduce((s, a) => s + Number(a.views || 0), 0);
+    const b = budgetStatus(code);
+    const budgetToday = b.camps.reduce((s, c) => s + Number(c.daily_budget || 0), 0);
+    const spendToday = b.camps.reduce((s, c) => s + Number(c.spend_today || 0), 0);
+    const guides = D.scripts_briefs || [];
+    return {
+      code, name: storeName(code), gmv, spend, orders, roas: spend > 0 ? gmv / spend : 0,
+      konten: rows.length, organik: organic.length, views,
+      winning: rows.filter(a => a.rank_tier === "WINNING").length,
+      adsAktif: rows.filter(a => ["DELIVERING", "LEARNING", "IN_QUEUE"].includes(a.delivery_status)).length,
+      waiting: guides.filter(g => g.human_status === "waiting_check").length,
+      approved: guides.filter(g => ["approved", "filming", "published"].includes(g.human_status)).length,
+      budgetToday, spendToday, saldo: b.balance ? b.balance.est : null, hasAds: b.hasAds,
+    };
+  }
+  function renderCompare() {
+    const list = state.stores.map(s => storeSummary(s.code));
+    const max = (k) => Math.max(1, ...list.map(x => x[k] || 0));
+    const bar = (v, m) => `<div class="cmp-bar"><span style="width:${Math.round((v || 0) / m * 100)}%"></span></div>`;
+    const label = (PERIODS.find(p => p[0] === state.period) || [0, ""])[1];
+    const metric = (title, key, f) => `
+      <div class="card">
+        <h3 style="margin:0 0 12px">${title}</h3>
+        ${list.map(x => `<div class="cmp-row"><div class="cmp-name">${esc(x.name)}</div>${bar(x[key], max(key))}<div class="cmp-val">${f(x)}</div></div>`).join("")}
+      </div>`;
+    return `
+      <div class="topbar">
+        <div>
+          <h1>Perbandingan Akun</h1>
+          <p>Semua toko dibandingkan di periode yang sama. Periode: ${label} terakhir.</p>
+        </div>
+        <div class="topbar-actions">${periodSelect()}</div>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        <table class="cmp-table">
+          <thead><tr><th>Toko</th><th>GMV iklan</th><th>Biaya iklan</th><th>ROAS</th><th>Pesanan</th><th>Video iklan aktif</th><th>Konten organik</th><th>Views organik</th><th>WINNING</th><th>Visual Guide (tunggu / jalan)</th><th>Budget hari ini</th><th>Saldo iklan</th></tr></thead>
+          <tbody>${list.map(x => `
+            <tr>
+              <td><b>${esc(x.name)}</b></td>
+              <td>${x.hasAds ? rp(x.gmv) : "–"}</td>
+              <td>${x.hasAds ? rp(x.spend) : "–"}</td>
+              <td>${x.hasAds ? x.roas.toFixed(2) + "x" : "–"}</td>
+              <td>${x.hasAds ? fmt(x.orders) : "–"}</td>
+              <td>${x.hasAds ? fmt(x.adsAktif) : "–"}</td>
+              <td>${fmt(x.organik)}</td>
+              <td>${fmt(x.views)}</td>
+              <td>${fmt(x.winning)}</td>
+              <td>${fmt(x.waiting)} / ${fmt(x.approved)}</td>
+              <td>${x.budgetToday ? `${rp(x.spendToday)} dari ${rp(x.budgetToday)}` : "–"}</td>
+              <td>${x.saldo === null ? "–" : rp(Math.round(x.saldo))}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+        <div style="font-size:12px;color:var(--teks2);margin-top:10px">"–" = akun iklan toko itu belum tersambung ke dashboard.</div>
+      </div>
+      <div class="grid-2">
+        ${metric("GMV dari iklan", "gmv", x => x.hasAds ? rp(x.gmv) : "–")}
+        ${metric("Biaya iklan", "spend", x => x.hasAds ? rp(x.spend) : "–")}
+        ${metric("ROAS", "roas", x => x.hasAds ? x.roas.toFixed(2) + "x" : "–")}
+        ${metric("Views konten organik", "views", x => fmt(x.views))}
+      </div>`;
+  }
+
+  // KELOLA USER (owner)
+  const ROLE_LABEL = { owner: "Owner", spv: "Supervisor", adv: "Advertiser" };
+  function storeChecks(name, selected) {
+    return state.stores.map(s => `<label class="chk-inline"><input type="checkbox" name="${name}" value="${esc(s.code)}" ${selected.includes(s.code) ? "checked" : ""}> ${esc(s.name)}</label>`).join("");
+  }
+  function renderUsers() {
+    if (!state.users) {
+      api("/api/users").then(r => { state.users = r.users; render(); }).catch(e => { state.flash = "Gagal ambil user: " + e.message; render(); });
+      return `<div class="topbar"><div><h1>Kelola User</h1><p>Memuat...</p></div></div>`;
+    }
+    const rows = state.users.map(u => {
+      const stores = String(u.stores || "").split(",").filter(Boolean);
+      return `
+      <tr class="${u.active ? "" : "row-off"}">
+        <td><b>${esc(u.name)}</b><div style="font-size:12px;color:var(--teks2)">${esc(u.username)}</div></td>
+        <td>${ROLE_LABEL[u.role] || esc(u.role)}</td>
+        <td>${u.role === "adv" ? (stores.map(c => esc(storeName(c))).join(", ") || "<span style='color:var(--merah)'>Belum ada toko</span>") : "Semua toko"}</td>
+        <td>${u.active ? (u.must_change ? "Belum ganti password" : "Aktif") : "Nonaktif"}</td>
+        <td style="font-size:12px;color:var(--teks2)">${u.last_login ? esc(u.last_login.slice(0, 16)) : "Belum pernah"}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm" data-user-edit="${u.id}">Ubah</button>
+          <button class="btn btn-sm" data-user-reset="${u.id}">Reset password</button>
+          ${u.id !== state.user.id ? `<button class="btn btn-sm" data-user-toggle="${u.id}">${u.active ? "Nonaktifkan" : "Aktifkan"}</button>` : ""}
+        </td>
+      </tr>
+      ${state.editUser === u.id ? `
+      <tr><td colspan="6">
+        <div class="user-form">
+          <input class="input" id="eu-name" value="${esc(u.name)}" placeholder="Nama">
+          <select class="input" id="eu-role" ${u.id === state.user.id ? "disabled" : ""}>${Object.keys(ROLE_LABEL).map(r => `<option value="${r}" ${u.role === r ? "selected" : ""}>${ROLE_LABEL[r]}</option>`).join("")}</select>
+          <div class="chk-group">${storeChecks("eu-store", stores)}</div>
+          <button class="btn btn-primary btn-sm" data-user-save="${u.id}">Simpan</button>
+          <button class="btn btn-sm" data-user-cancel="1">Batal</button>
+        </div>
+        <div style="font-size:12px;color:var(--teks2);margin-top:6px">Pilihan toko hanya berlaku untuk Advertiser. Owner dan Supervisor otomatis lihat semua toko.</div>
+      </td></tr>` : ""}`;
+    }).join("");
+    return `
+      <div class="topbar">
+        <div>
+          <h1>Kelola User</h1>
+          <p>Owner dan Supervisor lihat semua toko. Advertiser cuma lihat toko yang dicentang.</p>
+        </div>
+      </div>
+      ${state.flash ? `<div class="alert-banner" style="margin-bottom:16px"><span class="alert-dot"></span><div style="flex:1">${state.flash}</div><button class="btn btn-sm" data-flash-close="1">Tutup</button></div>` : ""}
+      <div class="card" style="overflow-x:auto">
+        <table class="cmp-table">
+          <thead><tr><th>Nama</th><th>Peran</th><th>Toko</th><th>Status</th><th>Login terakhir</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 12px">Tambah user</h3>
+        <div class="user-form">
+          <input class="input" id="nu-username" placeholder="Username (huruf kecil)">
+          <input class="input" id="nu-name" placeholder="Nama">
+          <select class="input" id="nu-role">${Object.keys(ROLE_LABEL).map(r => `<option value="${r}" ${r === "adv" ? "selected" : ""}>${ROLE_LABEL[r]}</option>`).join("")}</select>
+          <div class="chk-group">${storeChecks("nu-store", [])}</div>
+          <button class="btn btn-primary btn-sm" id="btn-user-create">Tambah</button>
+        </div>
+        <div style="font-size:12px;color:var(--teks2);margin-top:6px">Password sementara dibuat otomatis dan tampil sekali. User wajib ganti password saat login pertama.</div>
+      </div>`;
+  }
+
+  // LOGIN & GANTI PASSWORD
+  function renderLogin() {
+    return `
+      <div class="auth-wrap">
+        <div class="card auth-card">
+          <div class="brand" style="margin-bottom:18px"><div class="brand-logo">T</div><div><b>Terasehat Pipeline</b><span>Content & Ads Intelligence</span></div></div>
+          <h2 style="margin:0 0 4px">Masuk</h2>
+          <p style="margin:0 0 16px;color:var(--teks2);font-size:13px">Pakai username dan password dari owner.</p>
+          <form id="form-login">
+            <input class="input" name="username" placeholder="Username" autocomplete="username" required>
+            <input class="input" name="password" type="password" placeholder="Password" autocomplete="current-password" required>
+            ${state.authError ? `<div class="banner-error" style="font-size:13px">${esc(state.authError)}</div>` : ""}
+            <button class="btn btn-primary" type="submit">Masuk</button>
+          </form>
+        </div>
+      </div>`;
+  }
+  function renderChangePassword(forced) {
+    return `
+      <div class="${forced ? "auth-wrap" : ""}">
+        <div class="card auth-card">
+          <h2 style="margin:0 0 4px">Ganti password</h2>
+          <p style="margin:0 0 16px;color:var(--teks2);font-size:13px">${forced ? "Ini login pertama kamu. Ganti password sementara dari owner dengan password sendiri." : "Minimal 8 karakter."}</p>
+          <form id="form-password">
+            <input class="input" name="old_password" type="password" placeholder="Password sekarang" autocomplete="current-password" required>
+            <input class="input" name="new_password" type="password" placeholder="Password baru (min. 8 karakter)" autocomplete="new-password" minlength="8" required>
+            <input class="input" name="new_password2" type="password" placeholder="Ulangi password baru" autocomplete="new-password" minlength="8" required>
+            ${state.authError ? `<div class="banner-error" style="font-size:13px">${esc(state.authError)}</div>` : ""}
+            <button class="btn btn-primary" type="submit">Simpan password</button>
+            ${forced ? `<button class="btn" type="button" data-logout="1">Keluar</button>` : ""}
+          </form>
+        </div>
+      </div>`;
+  }
+
+  // SIDEBAR: toko yang dipilih, user, menu sesuai peran
+  function renderSidebar() {
+    const box = document.getElementById("store-box");
+    if (!box) return;
+    if (state.auth !== "ok" || !state.user) { box.innerHTML = ""; return; }
+    const vis = visibleStores();
+    const handles = vis.flatMap(s => s.tiktok_handles || []).map(h => "@" + h);
+    const sel = state.stores.length > 1 ? `
+      <select class="input store-select" id="sel-store" aria-label="Pilih toko">
+        <option value="ALL" ${state.store === "ALL" ? "selected" : ""}>Semua toko (${state.stores.length})</option>
+        ${state.stores.map(s => `<option value="${esc(s.code)}" ${state.store === s.code ? "selected" : ""}>${esc(s.name)}</option>`).join("")}
+      </select>` : `<div class="pipe-acct">${esc(storeName(state.stores[0] && state.stores[0].code))}</div>`;
+    box.innerHTML = `
+      <div class="pipe-hd"><span>TOKO</span><span class="dot-live">Loop Aktif</span></div>
+      ${sel}
+      <div class="pipe-sub">${handles.length ? "TikTok " + esc(handles.join(", ")) : "Akun TikTok organik belum didaftarkan"}</div>
+      <div class="pipe-sub" style="margin-top:6px;color:var(--color-ink)">Brain: Claude (06, 12, 18, 21 WIB)</div>`;
+    const who = document.getElementById("user-box");
+    if (who) who.innerHTML = `
+      <div><b>${esc(state.user.name)}</b> · ${ROLE_LABEL[state.user.role] || esc(state.user.role)}</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-sm" data-go-tab="password">Ganti password</button>
+        <button class="btn btn-sm" data-logout="1">Keluar</button>
+      </div>`;
+    const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? "" : "none"; };
+    show("nav-compare", state.stores.length > 1);
+    show("nav-users", state.user.role === "owner");
   }
 
   // 1. OVERVIEW PIPELINE (Diagram Alur Gambar 2 + KPI Toko Terasehat)
@@ -409,7 +641,7 @@
       <div class="topbar">
         <div>
           <h1>Ranking Konten & Iklan</h1>
-          <p>Data gabungan TikTok (@terasehat2), Seller Center, dan iklan GMV Max, diurutkan dari skor tertinggi. ${periodNote(hasWindow)}</p>
+          <p>Data gabungan TikTok organik dan iklan GMV Max ${state.store === "ALL" ? "semua toko" : "toko " + esc(storeName(state.store))}, diurutkan dari skor tertinggi. ${periodNote(hasWindow)}</p>
         </div>
         <div class="topbar-actions">
           ${periodSelect()}
@@ -680,26 +912,39 @@
   }
 
   function render() {
+    const container = document.getElementById("view-container");
+    document.body.classList.toggle("auth-mode", state.auth !== "ok");
+    renderSidebar();
+    if (state.auth === "checking") { container.innerHTML = `<div class="card" style="color:var(--teks2)">Memuat...</div>`; return; }
+    if (state.auth === "login") { container.innerHTML = renderLogin(); bindAuthForms(); return; }
+    if (state.auth === "change") { container.innerHTML = renderChangePassword(true); bindAuthForms(); return; }
+
     updateSidebarBadges();
     document.querySelectorAll(".nav-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.tab === state.tab);
     });
 
-    const container = document.getElementById("view-container");
+    if (state.tab === "users" && state.user.role !== "owner") state.tab = "overview";
+    if (state.tab === "compare" && state.stores.length < 2) state.tab = "overview";
     if (state.tab === "overview") container.innerHTML = renderOverview();
     else if (state.tab === "ranking") container.innerHTML = renderRanking();
     else if (state.tab === "dna") container.innerHTML = renderDna();
     else if (state.tab === "scripts") container.innerHTML = renderScripts();
     else if (state.tab === "checklist") container.innerHTML = renderChecklist();
     else if (state.tab === "radar") container.innerHTML = renderRadar();
-    if (!state.loading) container.insertAdjacentHTML("afterbegin", budgetBanner());
+    else if (state.tab === "compare") container.innerHTML = renderCompare();
+    else if (state.tab === "users") container.innerHTML = renderUsers();
+    else if (state.tab === "password") container.innerHTML = renderChangePassword(false);
+    if (!state.loading && !["users", "password"].includes(state.tab)) container.insertAdjacentHTML("afterbegin", budgetBanner());
     if (state.loading || state.error) {
       container.insertAdjacentHTML("afterbegin", `<div class="card" style="margin-bottom:12px;color:${state.error ? "var(--color-ember)" : "var(--color-mid-gray)"}">${state.error ? "⚠️ Gagal ambil data: " + esc(state.error) + ` <button class="btn" id="btn-reload" style="margin-left:8px">Coba lagi</button>` : "Memuat data dari database..."}</div>`);
       const r = document.getElementById("btn-reload");
-      if (r) r.onclick = () => { askSecret(); loadState(); };
+      if (r) r.onclick = () => loadState();
     }
+    bindAuthForms();
+    bindUserAdmin(container);
 
-    container.querySelectorAll("[data-go-tab]").forEach(el => {
+    document.querySelectorAll("[data-go-tab]").forEach(el => {
       el.onclick = () => {
         state.tab = el.dataset.goTab;
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -751,20 +996,20 @@
       };
     });
 
-    const btnBal = document.getElementById("btn-set-balance");
-    if (btnBal) btnBal.onclick = async () => {
-      const cur = (state.data.ads_balance || [])[0];
-      const v = window.prompt("Saldo akun iklan sekarang (Rupiah, lihat di TikTok Ads Manager):", cur ? String(Math.round(cur.balance_idr)) : "");
+    container.querySelectorAll("[data-set-balance]").forEach(btn => btn.onclick = async () => {
+      const code = btn.dataset.setBalance;
+      const cur = (dataFor(code).ads_balance || [])[0];
+      const v = window.prompt(`Saldo akun iklan ${storeName(code)} sekarang (Rupiah, lihat di TikTok Ads Manager):`, cur ? String(Math.round(cur.balance_idr)) : "");
       if (v === null) return;
       const bal = Number(String(v).replace(/[^\d]/g, ""));
       if (!String(v).trim() || !Number.isFinite(bal)) { alert("Isi angka saldo, contoh 500000"); return; }
       const w = window.prompt("Kasih peringatan kalau saldo cukup kurang dari berapa hari?", String(cur ? cur.warn_days : 3));
       if (w === null) return;
       try {
-        await api("/api/update", { type: "ads_balance", balance_idr: bal, warn_days: Number(w) || 3 });
+        await api("/api/update", { type: "ads_balance", store_code: code, balance_idr: bal, warn_days: Number(w) || 3 });
         await loadState();
       } catch (e) { alert("Gagal simpan: " + e.message); }
-    };
+    });
 
     const btnSelfLearn = document.getElementById("btn-run-self-learning");
     if (btnSelfLearn) {
@@ -774,9 +1019,97 @@
     }
   }
 
+  function bindAuthForms() {
+    const fl = document.getElementById("form-login");
+    if (fl) fl.onsubmit = async (e) => {
+      e.preventDefault();
+      const f = new FormData(fl);
+      try {
+        const r = await api("/api/login", { username: f.get("username"), password: f.get("password") });
+        state.authError = "";
+        state.user = r.user;
+        state.users = null;
+        state.auth = r.user.must_change ? "change" : "checking";
+        render();
+        if (!r.user.must_change) await loadState();
+      } catch (err) { state.authError = err.message; state.auth = "login"; render(); }
+    };
+    const fp = document.getElementById("form-password");
+    if (fp) fp.onsubmit = async (e) => {
+      e.preventDefault();
+      const f = new FormData(fp);
+      if (f.get("new_password") !== f.get("new_password2")) { state.authError = "Password baru tidak sama"; render(); return; }
+      try {
+        await api("/api/password", { old_password: f.get("old_password"), new_password: f.get("new_password") });
+        state.authError = "";
+        const wasForced = state.auth === "change";
+        state.auth = "checking";
+        if (!wasForced) { state.tab = "overview"; alert("Password sudah diganti."); }
+        await loadState();
+      } catch (err) { state.authError = err.message; render(); }
+    };
+    document.querySelectorAll("[data-logout]").forEach(b => b.onclick = async () => {
+      try { await api("/api/logout", {}); } catch (_) {}
+      state.user = null; state.users = null; state.raw = JSON.parse(JSON.stringify(EMPTY)); state.data = JSON.parse(JSON.stringify(EMPTY));
+      state.auth = "login"; state.tab = "overview"; render();
+    });
+    const ss = document.getElementById("sel-store");
+    if (ss) ss.onchange = (e) => {
+      state.store = e.target.value;
+      try { localStorage.setItem("TERASEHAT_STORE", state.store); } catch (_) {}
+      applyStore();
+      render();
+    };
+  }
+
+  function bindUserAdmin(container) {
+    const reloadUsers = async (msg) => { state.flash = msg || ""; state.users = null; state.editUser = null; render(); };
+    const checked = (name) => [...container.querySelectorAll(`input[name="${name}"]:checked`)].map(i => i.value);
+    const fc = container.querySelector("[data-flash-close]");
+    if (fc) fc.onclick = () => { state.flash = ""; render(); };
+    const create = document.getElementById("btn-user-create");
+    if (create) create.onclick = async () => {
+      const body = { action: "create", username: document.getElementById("nu-username").value, name: document.getElementById("nu-name").value,
+        role: document.getElementById("nu-role").value, stores: checked("nu-store") };
+      if (body.role === "adv" && !body.stores.length) { alert("Advertiser harus punya minimal 1 toko."); return; }
+      try {
+        const r = await api("/api/users", body);
+        reloadUsers(`User <b>${esc(r.username)}</b> dibuat. Password sementara: <code>${esc(r.temp_password)}</code>. Kirim ke orangnya lewat jalur pribadi; dia wajib ganti saat login pertama. Password ini tidak ditampilkan lagi.`);
+      } catch (e) { alert("Gagal: " + e.message); }
+    };
+    container.querySelectorAll("[data-user-edit]").forEach(b => b.onclick = () => { state.editUser = Number(b.dataset.userEdit); render(); });
+    container.querySelectorAll("[data-user-cancel]").forEach(b => b.onclick = () => { state.editUser = null; render(); });
+    container.querySelectorAll("[data-user-save]").forEach(b => b.onclick = async () => {
+      const role = document.getElementById("eu-role").value;
+      const stores = checked("eu-store");
+      if (role === "adv" && !stores.length) { alert("Advertiser harus punya minimal 1 toko."); return; }
+      try {
+        await api("/api/users", { action: "update", id: Number(b.dataset.userSave), name: document.getElementById("eu-name").value, role, stores });
+        reloadUsers("Perubahan user disimpan.");
+      } catch (e) { alert("Gagal: " + e.message); }
+    });
+    container.querySelectorAll("[data-user-reset]").forEach(b => b.onclick = async () => {
+      const u = state.users.find(x => x.id === Number(b.dataset.userReset));
+      if (!confirm(`Reset password ${u.name}? Dia akan keluar dari semua perangkat dan wajib pakai password sementara baru.`)) return;
+      try {
+        const r = await api("/api/users", { action: "reset", id: u.id });
+        reloadUsers(`Password <b>${esc(r.username)}</b> direset. Password sementara: <code>${esc(r.temp_password)}</code>. Tidak ditampilkan lagi.`);
+      } catch (e) { alert("Gagal: " + e.message); }
+    });
+    container.querySelectorAll("[data-user-toggle]").forEach(b => b.onclick = async () => {
+      const u = state.users.find(x => x.id === Number(b.dataset.userToggle));
+      if (u.active && !confirm(`Nonaktifkan ${u.name}? Dia langsung keluar dan tidak bisa login.`)) return;
+      try {
+        await api("/api/users", { action: "update", id: u.id, active: !u.active });
+        reloadUsers(u.active ? `${esc(u.name)} dinonaktifkan.` : `${esc(u.name)} diaktifkan lagi.`);
+      } catch (e) { alert("Gagal: " + e.message); }
+    });
+  }
+
   document.querySelectorAll(".nav-btn").forEach(btn => {
     btn.onclick = () => {
       state.tab = btn.dataset.tab;
+      if (state.tab === "users") state.users = null;
       window.scrollTo({ top: 0, behavior: "smooth" });
       render();
     };

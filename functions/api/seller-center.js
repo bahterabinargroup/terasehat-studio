@@ -25,6 +25,8 @@ export async function onRequestPost(context) {
   try {
     const body = await request.json().catch(() => ({}));
     const rows = body.items || [];
+    const store = String(body.store_code || "").toUpperCase();
+    if (!store) return Response.json({ ok: false, error: "store_code wajib (kode toko)" }, { status: 400 });
     if (!rows.length) {
       return Response.json({ ok: false, error: "Data Seller Center kosong." }, { status: 400 });
     }
@@ -41,8 +43,8 @@ export async function onRequestPost(context) {
       for (const it of scored) {
         await env.DB.prepare(`
           INSERT OR REPLACE INTO contents_ads
-          (id, account_type, script_code, title, creator_name, published_at, duration_s, views, likes, comments, shares, saves, er_pct, outlier_score, gmv_idr, orders, ad_spend_idr, roas, ctr_pct, hook_3s, total_score, rank_tier, claude_evaluation)
-          VALUES (?1, ?23, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
+          (id, account_type, script_code, title, creator_name, published_at, duration_s, views, likes, comments, shares, saves, er_pct, outlier_score, gmv_idr, orders, ad_spend_idr, roas, ctr_pct, hook_3s, total_score, rank_tier, claude_evaluation, store_code, source)
+          VALUES (?1, ?23, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?24, 'seller_center')
         `).bind(
           String(it.id),
           it.script_code || "",
@@ -66,7 +68,8 @@ export async function onRequestPost(context) {
           Number(it.total_score || 0),
           it.rank_tier || "POTENSIAL",
           it.claude_evaluation || "",
-          it.account_type || null
+          it.account_type || null,
+          store
         ).run();
       }
     }

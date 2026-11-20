@@ -21,15 +21,7 @@
         </div>
       </div>
 
-      <div class="pipe-box">
-        <div class="pipe-hd">
-          <span>NAMA TOKO</span>
-          <span class="dot-live">Loop Aktif</span>
-        </div>
-        <div class="pipe-acct">TeraSehat</div>
-        <div class="pipe-sub">TikTok @terasehat2 · TikTok Shop</div>
-        <div class="pipe-sub" style="margin-top:6px;color:var(--color-ink)" id="side-sync">Brain: Claude (06, 12, 18, 21 WIB)</div>
-      </div>
+      <div class="pipe-box" id="store-box"></div>
 
       <div class="nav-sec">Menu</div>
       <button class="nav-btn active" data-tab="overview">
@@ -54,14 +46,15 @@
       </button>
       <button class="nav-btn" data-tab="radar">
         <span>Radar Kompetitor</span>
-        
+      </button>
+      <button class="nav-btn" data-tab="compare" id="nav-compare" style="display:none">
+        <span>Perbandingan Akun</span>
+      </button>
+      <button class="nav-btn" data-tab="users" id="nav-users" style="display:none">
+        <span>Kelola User</span>
       </button>
 
-      <div class="side-foot">
-        <div><b>Data:</b> Seller Center + ScrapeCreators</div>
-                <div><b>Brain:</b> Claude (jadwal cloud)</div>
-        <div><b>Eksekutor:</b> Tim Creator (Manusia)</div>
-      </div>
+      <div class="side-foot" id="user-box"></div>
     </aside>
 
     <main class="main">
@@ -69,7 +62,7 @@
     </main>
   </div>
 
-  <!-- Modal Import Seller Center / Detail Konten -->
+  <!-- Modal detail -->
   <div class="modal-backdrop" id="app-modal">
     <div class="modal" id="app-modal-content"></div>
   </div>

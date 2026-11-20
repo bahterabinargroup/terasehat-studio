@@ -1,0 +1,8 @@
+{
+  "_catatan": "Daftar toko. Data tiap toko disimpan terpisah di dashboard (store_code). tiktok_handles = akun TikTok organik yang di-scrape untuk toko itu (1 kredit ScrapeCreators per akun per jadwal). ads = akun iklan GMV Max toko itu (null = belum tersambung, langkah iklan dan budget dilewati).",
+  "stores": [
+    { "code": "TS", "name": "Terasehat", "tiktok_handles": ["terasehat2"], "ads": null },
+    { "code": "NB", "name": "Nutri Balance", "tiktok_handles": [], "ads": "agent/ads_config.json" },
+    { "code": "TH", "name": "Terahealth", "tiktok_handles": [], "ads": null }
+  ]
+}

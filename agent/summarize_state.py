@@ -1,6 +1,7 @@
 """Ringkas /api/state jadi input kecil buat Claude Brain (hemat kuota).
 
-Pakai: python3 agent/summarize_state.py /tmp/state.json > /tmp/summary.json
+Pakai: python3 agent/summarize_state.py /tmp/state.json TS > /tmp/summary_TS.json
+Argumen kedua = kode toko. Ringkasan hanya berisi data toko itu (Brain jalan per toko).
 """
 import json
 import re
@@ -26,14 +27,21 @@ def trs_numbers(rows, *keys):
                 yield int(m.group(1))
 
 
-def main(path):
+def main(path, store):
     d = json.load(open(path))
-    ads = sorted(d.get("contents_ads", []), key=lambda x: x.get("total_score") or 0, reverse=True)
-    scripts = d.get("scripts_briefs", [])
+    all_ads, all_scripts = d.get("contents_ads", []), d.get("scripts_briefs", [])
+    mine = lambda rows: [r for r in rows if (r.get("store_code") or "") == store]
+    ads = sorted(mine(all_ads), key=lambda x: x.get("total_score") or 0, reverse=True)
+    scripts = mine(all_scripts)
+    toko = next((s for s in d.get("stores", []) if s.get("code") == store), {"code": store})
     ads_paid = [a for a in ads if (a.get("ad_spend_idr") or 0) >= 20000]
-    nums = list(trs_numbers(ads, "script_code", "creative_name")) + list(trs_numbers(scripts, "script_code", "creative_name"))
+    # Nomor TRS dipakai bersama semua toko, jadi dihitung dari seluruh data.
+    nums = list(trs_numbers(all_ads, "script_code", "creative_name")) + list(trs_numbers(all_scripts, "script_code", "creative_name"))
 
     summary = {
+        "store_code": store,
+        "toko": {"kode": store, "nama": toko.get("name"), "akun_tiktok": toko.get("tiktok_handles"),
+                 "iklan_tersambung": bool(toko.get("advertiser_id"))},
         "jumlah_konten": len(ads),
         "konten_dengan_data_penjualan": sum(1 for a in ads if (a.get("gmv_idr") or 0) > 0),
         "top_5": [slim(a, True) for a in ads[:5]],
@@ -45,7 +53,7 @@ def main(path):
         "jumlah_waiting_check": sum(1 for s in scripts if s.get("human_status") == "waiting_check"),
         "winning_dna": [
             {k: x.get(k) for k in ("id", "category", "title", "formula_hook", "confidence_score")}
-            for x in d.get("winning_dna", [])
+            for x in mine(d.get("winning_dna", []))
         ],
         "iklan_gmv_max": {
             "catatan": "hold_2s_pct = % penonton iklan yang bertahan 2 detik (kekuatan hook). roas = omzet/biaya.",
@@ -54,11 +62,13 @@ def main(path):
             "total_biaya": sum(a.get("ad_spend_idr") or 0 for a in ads_paid),
             "total_omzet": sum(a.get("gmv_idr") or 0 for a in ads_paid),
         },
-        "radar_kompetitor": d.get("competitor_radar", [])[:5],
+        "radar_kompetitor": mine(d.get("competitor_radar", []))[:5],
         "nomor_trs_berikutnya": max([146] + nums) + 1,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=1))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    if len(sys.argv) < 3:
+        sys.exit("Pakai: summarize_state.py STATE.json KODE_TOKO")
+    main(sys.argv[1], sys.argv[2].upper())

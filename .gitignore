@@ -2,3 +2,5 @@
 .wrangler/
 node_modules/
 .DS_Store
+*.local.txt
+.dev.vars

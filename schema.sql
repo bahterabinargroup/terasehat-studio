@@ -152,3 +152,5 @@ CREATE TABLE IF NOT EXISTS ads_balance (
   warn_days REAL DEFAULT 3,
   set_at TEXT
 );
+
+-- Multi toko + user: lihat migrations/007_multi_store_users.sql (tabel stores, users, sessions; kolom store_code).

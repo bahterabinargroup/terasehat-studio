@@ -474,3 +474,35 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .budget-bar { flex: 0 1 220px; min-width: 120px; height: 8px; background: var(--color-canvas); border-radius: 99px; overflow: hidden; }
 .budget-bar span { display: block; height: 100%; background: var(--color-ink); border-radius: 99px; }
 .budget-balance { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding-top: 14px; }
+
+/* Login */
+body.auth-mode .side { display: none; }
+body.auth-mode .shell { grid-template-columns: 1fr; }
+.auth-wrap { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
+.auth-card { width: 100%; max-width: 380px; }
+.auth-card form { display: flex; flex-direction: column; gap: 10px; }
+.auth-card .input { width: 100%; }
+
+/* Pilih toko di sidebar */
+.store-select { width: 100%; min-width: 0; margin: 2px 0 4px; font-weight: 600; }
+.btn-sm { height: 28px; padding: 0 10px; font-size: 12px; }
+
+/* Perbandingan akun & tabel user */
+.cmp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cmp-table th { text-align: left; font-weight: 500; color: var(--color-mid-gray); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--color-hairline); white-space: nowrap; }
+.cmp-table td { padding: 10px; border-bottom: 1px solid var(--color-hairline); vertical-align: top; }
+.cmp-table tr:last-child td { border-bottom: 0; }
+.cmp-table .row-off td { color: var(--color-mid-gray); }
+.cmp-row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.cmp-name { width: 120px; font-size: 13px; font-weight: 500; flex: none; }
+.cmp-bar { flex: 1; height: 10px; background: var(--color-canvas); border-radius: 99px; overflow: hidden; }
+.cmp-bar span { display: block; height: 100%; background: var(--color-ink); border-radius: 99px; }
+.cmp-val { width: 130px; text-align: right; font-size: 13px; font-weight: 600; flex: none; }
+.user-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.user-form .input { min-width: 150px; }
+.chk-group { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 4px; }
+.chk-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.budget-store + .budget-store { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--color-hairline); }
+.budget-store-hd { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; font-size: 14px; }
+.budget-store-hd span { font-size: 12px; color: var(--color-mid-gray); }
+@media (max-width: 640px) { .cmp-name { width: 90px; } .cmp-val { width: 100px; } }

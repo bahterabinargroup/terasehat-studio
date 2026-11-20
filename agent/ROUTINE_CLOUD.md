@@ -6,21 +6,28 @@ Dijalankan otomatis oleh routine Claude Code di cloud jam **06:00, 12:00, 18:00,
 Routine memberi dua nilai di prompt-nya: `DASHBOARD_URL` dan `PIPELINE_SECRET`.
 Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akhir.
 
+**Multi toko.** Daftar toko ada di `agent/stores.json` (TS Terasehat, NB Nutri Balance, TH Terahealth).
+Data tiap toko HARUS terpisah: setiap kiriman ke dashboard wajib membawa `store_code` toko itu.
+Jangan pernah mengirim data scrape satu toko dengan `store_code` toko lain.
+
 ## Langkah
 
-1. **Tarik data TikTok terbaru** untuk setiap akun di `agent/accounts.json` (sekaligus disimpan ke database oleh dashboard):
+1. **Tarik data TikTok terbaru** untuk setiap akun di `tiktok_handles` tiap toko (`agent/stores.json`). Disimpan ke toko itu saja:
    ```bash
-   for h in $(python3 -c "import json;print(' '.join(a['handle'] for a in json.load(open('agent/accounts.json'))['accounts']))"); do
+   python3 -c "import json;[print(s['code'],h) for s in json.load(open('agent/stores.json'))['stores'] for h in s['tiktok_handles']]" |
+   while read code h; do
      curl -sS -X POST "$DASHBOARD_URL/api/scrape" \
        -H "content-type: application/json" -H "x-pipeline-secret: $PIPELINE_SECRET" \
-       -d "{\"handle\":\"$h\",\"region\":\"ID\"}" -o "/tmp/scrape_$h.json" -w "$h %{http_code}\n"
+       -d "{\"handle\":\"$h\",\"region\":\"ID\",\"store_code\":\"$code\"}" -o "/tmp/scrape_$h.json" -w "$code $h %{http_code}\n"
    done
    ```
    Kalau ada yang gagal, lanjut saja dan catat di laporan akhir.
 
 1b. **Tarik laporan iklan GMV Max per video** — HANYA di jadwal 06:00 WIB (cek: `date -u +%H` = `23`),
    atau kalau prompt routine bilang "paksa iklan". Di jam lain lewati langkah ini.
-   Pakai connector **TikTok for Business** (tool `tool_execute`). ID ada di `agent/ads_config.json`.
+   Pakai connector **TikTok for Business** (tool `tool_execute`).
+   Jalankan untuk TIAP toko di `agent/stores.json` yang `ads`-nya tidak null; ID akun iklan ada di file yang ditunjuk `ads`
+   (sekarang hanya NB → `agent/ads_config.json`). Toko dengan `ads: null` dilewati.
    Tanggal akhir = kemarin (zona WIB). Format `YYYY-MM-DD`.
    **Jendela waktu yang ditarik** (dashboard punya pilihan periode):
    - Setiap hari: **7**, **10**, dan **30** hari.
@@ -54,19 +61,20 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
       `video_info.duration` → `duration_s`. `account_type` = `"OFFICIAL"` kalau `identity_info.identity_id`
       = `official_identity_id` di `agent/ads_config.json`, selain itu `"AFFILIATE"`.
       Kalau `item_list` kosong: `account_type: "AFFILIATE"` (kreator afiliasi luar). Nama akunnya nanti diisi langkah 1d.
-   3. Untuk TIAP jendela tulis `/tmp/ads_N.json` = `{"period": "S..E", "window_days": N, "items": [ {"item_id": ...,
+   3. Untuk TIAP jendela tulis `/tmp/ads_KODE_N.json` = `{"store_code": "KODE", "period": "S..E", "window_days": N, "items": [ {"item_id": ...,
       <semua metrik di atas>, "tt_account_name"?, "account_type"?, "caption"?, "duration_s"?} ]}`
       (buang baris `item_id` = `-1`, itu kartu produk). **Salin SEMUA baris dari laporan, jangan diringkas.** Baris dengan `item_id` sama (video di beberapa kampanye) kirim apa adanya, dashboard yang menjumlahkan. Kirim **jendela 7 hari paling akhir**
       (karena dia yang menandai iklan yang sudah tidak tayang):
       ```bash
-      for N in 180 90 30 10 7; do [ -f /tmp/ads_$N.json ] && curl -sS -X POST "$DASHBOARD_URL/api/ads-sync" \
+      KODE=NB   # ulangi untuk tiap toko yang punya akun iklan
+      for N in 180 90 30 10 7; do [ -f /tmp/ads_${KODE}_$N.json ] && curl -sS -X POST "$DASHBOARD_URL/api/ads-sync" \
         -H "content-type: application/json" -H "x-pipeline-secret: $PIPELINE_SECRET" \
-        --data-binary @/tmp/ads_$N.json -w " $N %{http_code}\n"; done
+        --data-binary @/tmp/ads_${KODE}_$N.json -w " $KODE $N %{http_code}\n"; done
       ```
    Kalau connector tidak tersedia atau error izin, lewati dan catat di laporan akhir.
 
 1c. **Pantau budget iklan** — jalankan di SETIAP jadwal (bukan cuma 06:00), biar peringatan "budget mau habis" di dashboard selalu baru.
-   Pakai connector TikTok for Business. `T` = tanggal hari ini (WIB), format `YYYY-MM-DD`.
+   Pakai connector TikTok for Business, untuk TIAP toko yang `ads`-nya tidak null. `T` = tanggal hari ini (WIB), format `YYYY-MM-DD`.
    1. `gmv_max_campaign_get` (params sama seperti 1b.1). Ambil kampanye dengan `operation_status` = `"ENABLE"`.
       Kalau langkah 1b sudah jalan di jadwal ini, pakai hasil yang sama.
    2. Untuk tiap kampanye aktif: `tool_execute` → `campaign_gmv_max_info_get` params `{"advertiser_id": ADV, "campaign_id": ID}`.
@@ -78,12 +86,12 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
    4. Spend total akun per hari (14 hari terakhir sampai T): `gmv_max_report_get` dengan
       `"dimensions": ["advertiser_id","stat_time_day"]`, `"metrics": ["cost","gross_revenue"]`,
       `"filtering": {"campaign_ids": [SEMUA campaign_id, termasuk yang mati]}`.
-   5. Tulis `/tmp/budget.json` = `{"stat_date": T, "campaigns": [{"campaign_id", "campaign_name", "operation_status",
+   5. Tulis `/tmp/budget_KODE.json` = `{"store_code": "KODE", "stat_date": T, "campaigns": [{"campaign_id", "campaign_name", "operation_status",
       "daily_budget", "auto_budget", "max_budget", "spend_today", "revenue_today"}], "daily": [{"date": "YYYY-MM-DD", "cost", "gross_revenue"}]}`,
       lalu kirim:
       ```bash
       curl -sS -X POST "$DASHBOARD_URL/api/budget-sync" -H "content-type: application/json" \
-        -H "x-pipeline-secret: $PIPELINE_SECRET" --data-binary @/tmp/budget.json
+        -H "x-pipeline-secret: $PIPELINE_SECRET" --data-binary @/tmp/budget_NB.json
       ```
    Di laporan akhir sebut kampanye yang spend-nya sudah ≥ 80% budget harian.
 
@@ -93,28 +101,33 @@ Jangan pernah menulis `PIPELINE_SECRET` ke file di repo, commit, atau output akh
      -H "x-pipeline-secret: $PIPELINE_SECRET" -d '{"limit":30}'
    ```
 
-2. **Ambil data dashboard lalu ringkas:**
+2. **Ambil data dashboard, lalu ringkas PER TOKO:**
    ```bash
    curl -sS "$DASHBOARD_URL/api/state" -H "x-pipeline-secret: $PIPELINE_SECRET" -o /tmp/state.json
-   python3 agent/summarize_state.py /tmp/state.json > /tmp/summary.json
+   for code in $(python3 -c "import json;print(' '.join(s['code'] for s in json.load(open('agent/stores.json'))['stores']))"); do
+     python3 agent/summarize_state.py /tmp/state.json $code > /tmp/summary_$code.json
+   done
    ```
+   Toko yang `jumlah_konten`-nya 0 dilewati (belum ada data, jangan mengarang).
 
-3. **Baca** `agent/PROMPT_BRAIN_CLAUDE.md`, `CREATIVE_GUIDE_CAROUSEL.md`, dan `/tmp/summary.json`.
-   Pakai `nomor_trs_berikutnya` dari summary untuk kode creative baru.
+3. **Untuk TIAP toko yang ada datanya**, kerjakan langkah 3–5 terpisah.
+   **Baca** `agent/PROMPT_BRAIN_CLAUDE.md`, `CREATIVE_GUIDE_CAROUSEL.md`, dan `/tmp/summary_KODE.json`.
+   Pakai `nomor_trs_berikutnya` untuk kode creative baru. Nomor TRS dipakai bersama semua toko, jadi setelah satu toko
+   memakai nomor, toko berikutnya lanjut dari nomor sesudahnya. Kode AKUN di `creative_name` = kode toko.
 
-4. **Tulis hasil** sesuai format di `PROMPT_BRAIN_CLAUDE.md` ke `/tmp/brain_out.json`, lalu cek valid:
+4. **Tulis hasil** toko itu ke `/tmp/brain_out_KODE.json` (wajib ada `"store_code": "KODE"`), lalu cek valid:
    ```bash
-   python3 -c "import json; json.load(open('/tmp/brain_out.json')); print('json ok')"
+   python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('store_code'); print('json ok', d['store_code'])" /tmp/brain_out_KODE.json
    ```
 
 5. **Kirim ke dashboard:**
    ```bash
    curl -sS -X POST "$DASHBOARD_URL/api/brain-sync" \
      -H "content-type: application/json" -H "x-pipeline-secret: $PIPELINE_SECRET" \
-     --data-binary @/tmp/brain_out.json
+     --data-binary @/tmp/brain_out_KODE.json
    ```
-   Respons harus `"ok": true`.
+   Respons harus `"ok": true`. Batas Visual Guide baru (maksimal 2, dan tidak ada yang baru kalau `jumlah_waiting_check` ≥ 6) berlaku per toko.
 
 6. **Jangan** commit, push, atau mengubah file di repo.
 
-7. **Laporan akhir** (singkat): status scrape, status iklan (jumlah video iklan terkirim atau "dilewati"), status budget (kampanye yang hampir habis), jumlah DNA / Visual Guide / evaluasi / checklist yang terkirim, dan error kalau ada.
+7. **Laporan akhir** (singkat, dipisah per toko): status scrape, status iklan (jumlah video iklan terkirim atau "dilewati"), status budget (kampanye yang hampir habis), jumlah DNA / Visual Guide / evaluasi / checklist yang terkirim, dan error kalau ada.
