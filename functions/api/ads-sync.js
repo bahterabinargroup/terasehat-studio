@@ -5,7 +5,9 @@
 // Body: { store_code: "NB", period: "2026-11-07..2026-11-13", window_days?: 7 | 10 | 30 | 90 | 180, items: [{ item_id, cost, gross_revenue, roi, orders,
 //         product_impressions, product_clicks, ad_click_rate, ad_conversion_rate,
 //         ad_video_view_rate_2s, ad_video_view_rate_6s, ad_video_view_rate_p100,
-//         creative_delivery_status?, tt_account_name?, account_type? (OFFICIAL | AFFILIATE), caption?, duration_s? }] }
+//         creative_delivery_status?, tt_account_name?, account_type? (OFFICIAL | MARKETING | AFFILIATE), caption?, duration_s? }] }
+
+import { classifyAccounts } from "../../lib/accounts.js";
 
 const n = (v) => Number(v || 0) || 0;
 
@@ -82,12 +84,13 @@ export async function onRequestPost({ request, env }) {
           INSERT OR IGNORE INTO contents_ads (id, account_type, script_code, title, creator_name, published_at, duration_s,
             total_score, rank_tier, video_url, source, delivery_status, store_code, updated_at)
           VALUES (?1, ?2, ?3, ?4, ?5, '', ?6, 1, 'BONCOS', ?7, 'gmv_max', ?8, ?9, datetime('now'))
-        `).bind(id, ["OFFICIAL", "AFFILIATE", "OWN"].includes(it.account_type) ? it.account_type : "AFFILIATE",
+        `).bind(id, ["OFFICIAL", "MARKETING", "AFFILIATE"].includes(it.account_type) ? it.account_type : "AFFILIATE",
           "AD-" + id.slice(-4), "[ADS] " + (String(it.caption || "").split("#")[0].trim().slice(0, 90) || "Video " + id),
           it.tt_account_name ? "@" + String(it.tt_account_name).replace(/^@/, "") : "-", n(it.duration_s),
           `https://www.tiktok.com/@_/video/${id}`, it.creative_delivery_status ? String(it.creative_delivery_status) : "NOT_IN_REPORT", store);
       });
       for (let i = 0; i < ins.length; i += 40) await env.DB.batch(ins.slice(i, i + 40));
+      await classifyAccounts(env, store);
       return Response.json({ ok: true, store_code: store, count: items.length, period, window_days: windowDays });
     }
 
@@ -109,7 +112,7 @@ export async function onRequestPost({ request, env }) {
           rank_tier = CASE WHEN excluded.ad_spend_idr >= 20000 THEN excluded.rank_tier ELSE contents_ads.rank_tier END,
           ads_period = excluded.ads_period,
           delivery_status = COALESCE(excluded.delivery_status, contents_ads.delivery_status),
-          account_type = COALESCE(contents_ads.account_type, excluded.account_type),
+          account_type = COALESCE(excluded.account_type, contents_ads.account_type),
           creator_name = CASE WHEN contents_ads.creator_name IN ('-', '') OR contents_ads.creator_name IS NULL THEN excluded.creator_name ELSE contents_ads.creator_name END,
           title = CASE WHEN contents_ads.source = 'gmv_max' AND excluded.title != contents_ads.title AND excluded.hook_3s != '' THEN excluded.title ELSE contents_ads.title END,
           hook_3s = CASE WHEN COALESCE(contents_ads.hook_3s, '') = '' THEN excluded.hook_3s ELSE contents_ads.hook_3s END,
@@ -121,7 +124,7 @@ export async function onRequestPost({ request, env }) {
         n(it.ad_click_rate), n(it.ad_conversion_rate), n(it.product_impressions), n(it.product_clicks),
         n(it.ad_video_view_rate_2s), n(it.ad_video_view_rate_6s), n(it.ad_video_view_rate_p100),
         score, tier, `https://www.tiktok.com/@_/video/${id}`, period,
-        ["OFFICIAL", "AFFILIATE", "OWN"].includes(it.account_type) ? it.account_type : null,
+        ["OFFICIAL", "MARKETING", "AFFILIATE"].includes(it.account_type) ? it.account_type : null,
         it.tt_account_name ? "@" + String(it.tt_account_name).replace(/^@/, "") : "-",
         n(it.duration_s), String(it.caption || "").slice(0, 300),
         it.creative_delivery_status ? String(it.creative_delivery_status) : null, store
@@ -136,6 +139,7 @@ export async function onRequestPost({ request, env }) {
       ).bind(store, ...ids).run();
     }
 
+    await classifyAccounts(env, store);
     return Response.json({ ok: true, store_code: store, count: items.length, period, window_days: windowDays });
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });

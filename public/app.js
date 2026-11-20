@@ -1,10 +1,11 @@
 (function () {
-  const EMPTY = { contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], ads_period_metrics: [], ads_budget: [], ads_daily_spend: [], ads_balance: [] };
+  const EMPTY = { store_accounts: [], contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], ads_period_metrics: [], ads_budget: [], ads_daily_spend: [], ads_balance: [] };
 
   const state = {
     tab: "overview",
     tierFilter: "ALL",
     adFilter: "ALL",
+    acctFilter: "ALL",
     period: (() => { try { return Number(localStorage.getItem("TERASEHAT_PERIOD")) || 30; } catch (_) { return 30; } })(),
     store: (() => { try { return localStorage.getItem("TERASEHAT_STORE") || "ALL"; } catch (_) { return "ALL"; } })(),
     raw: JSON.parse(JSON.stringify(EMPTY)),
@@ -317,11 +318,39 @@
         </table>
         <div style="font-size:12px;color:var(--teks2);margin-top:10px">"–" = akun iklan toko itu belum tersambung ke dashboard.</div>
       </div>
+      ${renderKindSplit()}
       <div class="grid-2">
         ${metric("GMV dari iklan", "gmv", x => x.hasAds ? rp(x.gmv) : "–")}
         ${metric("Biaya iklan", "spend", x => x.hasAds ? rp(x.spend) : "–")}
         ${metric("ROAS", "roas", x => x.hasAds ? x.roas.toFixed(2) + "x" : "–")}
         ${metric("Views konten organik", "views", x => fmt(x.views))}
+      </div>`;
+  }
+
+  function renderKindSplit() {
+    const rows = state.stores.flatMap(st => {
+      const { rows } = periodRows(dataFor(st.code));
+      return ACCOUNT_KINDS.map(([k, l]) => {
+        const r = rows.filter(a => a.account_type === k);
+        const gmv = r.reduce((s, a) => s + Number(a.gmv_idr || 0), 0), spend = r.reduce((s, a) => s + Number(a.ad_spend_idr || 0), 0);
+        const views = r.reduce((s, a) => s + Number(a.views || 0), 0);
+        return { store: st.name, kind: l, n: r.length, gmv, spend, roas: spend > 0 ? gmv / spend : 0, views,
+          orders: r.reduce((s, a) => s + Number(a.orders || 0), 0) };
+      });
+    });
+    return `
+      <div class="card" style="overflow-x:auto">
+        <h3 style="margin:0 0 4px">Per jenis akun</h3>
+        <div style="font-size:12px;color:var(--teks2);margin-bottom:10px">Akun utama = wajah resmi toko. Akun pemasaran = akun internal untuk jualan. Afiliasi = kreator luar.</div>
+        <table class="cmp-table">
+          <thead><tr><th>Toko</th><th>Jenis akun</th><th>Jumlah video</th><th>GMV iklan</th><th>Biaya iklan</th><th>ROAS</th><th>Pesanan</th><th>Views</th></tr></thead>
+          <tbody>${rows.map((x, i) => `
+            <tr>
+              <td>${i % 3 === 0 ? `<b>${esc(x.store)}</b>` : ""}</td>
+              <td>${x.kind}</td><td>${fmt(x.n)}</td><td>${x.n ? rp(x.gmv) : "–"}</td><td>${x.n ? rp(x.spend) : "–"}</td>
+              <td>${x.spend ? x.roas.toFixed(2) + "x" : "–"}</td><td>${x.n ? fmt(x.orders) : "–"}</td><td>${x.n ? fmt(x.views) : "–"}</td>
+            </tr>`).join("")}</tbody>
+        </table>
       </div>`;
   }
 
@@ -376,6 +405,7 @@
           <tbody>${rows}</tbody>
         </table>
       </div>
+      ${renderStoreAccounts()}
       <div class="card">
         <h3 style="margin:0 0 12px">Tambah user</h3>
         <div class="user-form">
@@ -386,6 +416,28 @@
           <button class="btn btn-primary btn-sm" id="btn-user-create">Tambah</button>
         </div>
         <div style="font-size:12px;color:var(--teks2);margin-top:6px">Password sementara dibuat otomatis dan tampil sekali. User wajib ganti password saat login pertama.</div>
+      </div>`;
+  }
+
+  function renderStoreAccounts() {
+    const acc = state.raw.store_accounts || [];
+    const label = Object.fromEntries(ACCOUNT_KINDS);
+    return `
+      <div class="card">
+        <h3 style="margin:0 0 4px">Akun TikTok tiap toko</h3>
+        <div style="font-size:12px;color:var(--teks2);margin-bottom:12px">Video dari akun di daftar ini dihitung sebagai Akun utama atau Akun pemasaran. Video dari akun lain otomatis dihitung Afiliasi.</div>
+        ${state.stores.map(st => {
+          const list = acc.filter(a => a.store_code === st.code);
+          return `<div class="acct-store"><b>${esc(st.name)}</b>
+            <div class="acct-list">${list.length ? list.map(a => `<span class="badge badge-account">@${esc(a.handle)} · ${label[a.kind] || a.kind}
+              <button class="acct-x" title="Hapus" data-acct-remove="${esc(a.handle)}">×</button></span>`).join("") : `<span style="font-size:12px;color:var(--teks2)">Belum ada akun</span>`}</div></div>`;
+        }).join("")}
+        <div class="user-form" style="margin-top:12px">
+          <input class="input" id="sa-handle" placeholder="@username TikTok">
+          <select class="input" id="sa-store">${state.stores.map(st => `<option value="${esc(st.code)}">${esc(st.name)}</option>`).join("")}</select>
+          <select class="input" id="sa-kind"><option value="OFFICIAL">Akun utama</option><option value="MARKETING" selected>Akun pemasaran</option></select>
+          <button class="btn btn-primary btn-sm" id="btn-acct-add">Tambah akun</button>
+        </div>
       </div>`;
   }
 
@@ -430,7 +482,9 @@
     if (!box) return;
     if (state.auth !== "ok" || !state.user) { box.innerHTML = ""; return; }
     const vis = visibleStores();
-    const handles = vis.flatMap(s => s.tiktok_handles || []).map(h => "@" + h);
+    const acc = (state.raw.store_accounts || []).filter(a => vis.some(s => s.code === a.store_code));
+    const handles = acc.filter(a => a.kind === "OFFICIAL").map(a => "@" + a.handle);
+    const mkt = acc.filter(a => a.kind === "MARKETING").map(a => "@" + a.handle);
     const sel = state.stores.length > 1 ? `
       <select class="input store-select" id="sel-store" aria-label="Pilih toko">
         <option value="ALL" ${state.store === "ALL" ? "selected" : ""}>Semua toko (${state.stores.length})</option>
@@ -439,7 +493,8 @@
     box.innerHTML = `
       <div class="pipe-hd"><span>TOKO</span><span class="dot-live">Loop Aktif</span></div>
       ${sel}
-      <div class="pipe-sub">${handles.length ? "TikTok " + esc(handles.join(", ")) : "Akun TikTok organik belum didaftarkan"}</div>
+      <div class="pipe-sub">${handles.length ? "Utama: " + esc(handles.join(", ")) : "Akun utama belum didaftarkan"}</div>
+      ${mkt.length ? `<div class="pipe-sub">Pemasaran: ${esc(mkt.join(", "))}</div>` : ""}
       <div class="pipe-sub" style="margin-top:6px;color:var(--color-ink)">Brain: Claude (06, 12, 18, 21 WIB)</div>`;
     const who = document.getElementById("user-box");
     if (who) who.innerHTML = `
@@ -587,6 +642,9 @@
     ["NOT_MATERIAL", "Bukan materi iklan", (a) => !isAdMaterial(a)],
     ["AFF_MATERIAL", "Materi iklan afiliasi", (a) => isAdMaterial(a) && isAffiliate(a)],
   ];
+  // Ekosistem akun toko: Akun Utama (wajah resmi toko), Akun Pemasaran (internal, banyak video keranjang kuning), Afiliasi (pihak luar).
+  const ACCOUNT_KINDS = [["OFFICIAL", "Akun utama"], ["MARKETING", "Akun pemasaran"], ["AFFILIATE", "Afiliasi"]];
+  const ACCT_FILTERS = [["ALL", "Semua akun", () => true], ...ACCOUNT_KINDS.map(([k, l]) => [k, l, (a) => a.account_type === k])];
   function adBadge(a) {
     if (isActiveAd(a)) return `<span class="badge badge-fyp">Iklan aktif</span>`;
     if (isAds(a)) return `<span class="badge badge-mid">Ads (tidak tayang)</span>`;
@@ -594,18 +652,22 @@
     return `<span class="badge badge-low">Organik</span>`;
   }
   function accountBadge(a) {
-    const label = { OWN: "Akun sendiri", OFFICIAL: "Akun resmi toko", AFFILIATE: "Afiliasi" }[a.account_type];
+    const label = Object.fromEntries(ACCOUNT_KINDS)[a.account_type];
     return label ? `<span class="badge badge-purple">${label}</span>` : "";
   }
 
   function renderRanking() {
     const { rows: all, hasWindow } = periodRows();
     const adFn = (AD_FILTERS.find(f => f[0] === state.adFilter) || AD_FILTERS[0])[2];
-    let ads = all.filter(adFn).sort((a, b) =>
+    const acctFn = (ACCT_FILTERS.find(f => f[0] === state.acctFilter) || ACCT_FILTERS[0])[2];
+    let ads = all.filter(adFn).filter(acctFn).sort((a, b) =>
       state.adFilter === "ACTIVE" ? Number(b.ad_spend_idr || 0) - Number(a.ad_spend_idr || 0) : b.total_score - a.total_score);
     if (state.tierFilter !== "ALL") {
       ads = ads.filter(a => a.rank_tier === state.tierFilter);
     }
+    const acctSegHtml = ACCT_FILTERS.map(([key, label, fn]) =>
+      `<button class="seg-btn ${state.acctFilter === key ? "active" : ""}" data-acct-filter="${key}">${label} <span class="seg-count">${all.filter(adFn).filter(fn).length}</span></button>`
+    ).join("");
     const segHtml = AD_FILTERS.map(([key, label, fn]) =>
       `<button class="seg-btn ${state.adFilter === key ? "active" : ""}" data-ad-filter="${key}">${label} <span class="seg-count">${all.filter(fn).length}</span></button>`
     ).join("");
@@ -655,6 +717,7 @@
       </div>
 
       <div class="seg" role="tablist" aria-label="Filter status iklan">${segHtml}</div>
+      <div class="seg" role="tablist" aria-label="Filter jenis akun" style="margin-top:8px">${acctSegHtml}</div>
 
       <div class="card">
         <div class="table-wrap">
@@ -825,6 +888,8 @@
           <div>
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
               <span class="badge badge-purple">NAMA CREATIVE: ${esc(s.creative_name || s.script_code)}</span>
+              ${s.target_account ? `<span class="badge badge-account">Untuk ${Object.fromEntries(ACCOUNT_KINDS)[s.target_account] || esc(s.target_account)}</span>` : ""}
+              ${state.store === "ALL" && state.stores.length > 1 ? `<span class="badge badge-account">${esc(storeName(s.store_code))}</span>` : ""}
               ${humanBadge(s.human_status)}
             </div>
             <h3 style="margin:0;font-size:16px">${esc(s.title)}</h3>
@@ -961,6 +1026,9 @@
     };
     const selTier = document.getElementById("sel-tier-filter");
     if (selTier) selTier.onchange = (e) => { state.tierFilter = e.target.value; render(); };
+    container.querySelectorAll("[data-acct-filter]").forEach(b => {
+      b.onclick = () => { state.acctFilter = b.dataset.acctFilter; render(); };
+    });
     container.querySelectorAll("[data-ad-filter]").forEach(b => {
       b.onclick = () => { state.adFilter = b.dataset.adFilter; render(); };
     });
@@ -1067,6 +1135,19 @@
     const checked = (name) => [...container.querySelectorAll(`input[name="${name}"]:checked`)].map(i => i.value);
     const fc = container.querySelector("[data-flash-close]");
     if (fc) fc.onclick = () => { state.flash = ""; render(); };
+    const addAcct = document.getElementById("btn-acct-add");
+    if (addAcct) addAcct.onclick = async () => {
+      try {
+        await api("/api/store-accounts", { action: "add", handle: document.getElementById("sa-handle").value,
+          store_code: document.getElementById("sa-store").value, kind: document.getElementById("sa-kind").value });
+        await loadState(); state.flash = "Akun ditambahkan. Label video ikut diperbarui."; render();
+      } catch (e) { alert("Gagal: " + e.message); }
+    };
+    container.querySelectorAll("[data-acct-remove]").forEach(b => b.onclick = async () => {
+      if (!confirm(`Hapus @${b.dataset.acctRemove} dari daftar akun toko? Videonya akan dihitung sebagai Afiliasi.`)) return;
+      try { await api("/api/store-accounts", { action: "remove", handle: b.dataset.acctRemove }); await loadState(); }
+      catch (e) { alert("Gagal: " + e.message); }
+    });
     const create = document.getElementById("btn-user-create");
     if (create) create.onclick = async () => {
       const body = { action: "create", username: document.getElementById("nu-username").value, name: document.getElementById("nu-name").value,

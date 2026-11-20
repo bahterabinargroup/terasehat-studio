@@ -4,6 +4,8 @@
 //
 // POST body: { limit?: 15, ids?: ["7707334046623206676", ...], force?: false }
 
+import { classifyAccounts } from "../../lib/accounts.js";
+
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 export async function fetchTikTokVideo(id) {
@@ -55,7 +57,6 @@ export async function onRequestPost({ request, env }) {
       await Promise.all(rows.slice(i, i + 5).map(async (r) => {
         try {
           const v = await fetchTikTokVideo(r.id);
-          const own = (env.TIKTOK_HANDLE || "terasehat2").replace(/^@/, "");
           const caption = v.desc.split("#")[0].trim().slice(0, 90);
           const views = v.views;
           const er = views > 0 ? Math.round(((v.likes + v.comments + v.shares + v.saves) / views) * 10000) / 100 : 0;
@@ -70,12 +71,10 @@ export async function onRequestPost({ request, env }) {
               shares = MAX(COALESCE(shares, 0), ?10), saves = MAX(COALESCE(saves, 0), ?11),
               er_pct = CASE WHEN COALESCE(er_pct, 0) = 0 THEN ?12 ELSE er_pct END,
               video_url = ?13,
-              account_type = CASE WHEN ?14 = 1 THEN 'OWN' ELSE COALESCE(account_type, 'AFFILIATE') END,
               enriched_at = datetime('now')
             WHERE id = ?1
           `).bind(r.id, "@" + v.handle, "[ADS] " + (caption || "Video @" + v.handle), v.desc.slice(0, 300), v.created, v.duration,
-            views, v.likes, v.comments, v.shares, v.saves, er, `https://www.tiktok.com/@${v.handle}/video/${r.id}`,
-            v.handle.toLowerCase() === own.toLowerCase() ? 1 : 0).run();
+            views, v.likes, v.comments, v.shares, v.saves, er, `https://www.tiktok.com/@${v.handle}/video/${r.id}`).run();
           done.push({ id: r.id, handle: v.handle });
         } catch (e) {
           failed.push({ id: r.id, error: e.message });
@@ -83,6 +82,7 @@ export async function onRequestPost({ request, env }) {
         }
       }));
     }
+    if (done.length) await classifyAccounts(env);
     return Response.json({ ok: true, checked: rows.length, done, failed });
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });

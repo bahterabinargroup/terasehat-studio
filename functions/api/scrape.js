@@ -1,3 +1,5 @@
+import { classifyAccounts } from "../../lib/accounts.js";
+
 // Endpoint Penarik Data ScrapeCreators:
 // 1. TikTok Profile & Videos (+ Transkrip WebVTT)
 // 2. TikTok Shop & TikTok Ads Library
@@ -115,7 +117,7 @@ export async function onRequestPost(context) {
             INSERT INTO contents_ads
             (id, account_type, script_code, creative_name, title, creator_name, published_at, duration_s, views, likes, comments, shares, saves,
              er_pct, outlier_score, hook_3s, transcript_full, total_score, rank_tier, video_url, source, store_code, updated_at)
-            VALUES (?1, 'OWN', ?2, ?3, ?4, ?19, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, 'tiktok_scrape', ?20, datetime('now'))
+            VALUES (?1, 'OFFICIAL', ?2, ?3, ?4, ?19, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, 'tiktok_scrape', ?20, datetime('now'))
             ON CONFLICT(id) DO UPDATE SET
               script_code = excluded.script_code, creative_name = excluded.creative_name,
               title = excluded.title, duration_s = excluded.duration_s,
@@ -125,7 +127,7 @@ export async function onRequestPost(context) {
               transcript_full = CASE WHEN excluded.transcript_full != '' THEN excluded.transcript_full ELSE contents_ads.transcript_full END,
               total_score = CASE WHEN contents_ads.gmv_idr > 0 THEN contents_ads.total_score ELSE excluded.total_score END,
               rank_tier = CASE WHEN contents_ads.gmv_idr > 0 THEN contents_ads.rank_tier ELSE excluded.rank_tier END,
-              video_url = excluded.video_url, account_type = COALESCE(contents_ads.account_type, 'OWN'),
+              video_url = excluded.video_url, account_type = COALESCE(contents_ads.account_type, 'OFFICIAL'),
               store_code = COALESCE(contents_ads.store_code, excluded.store_code), updated_at = datetime('now')
           `).bind(
             String(it.id), it.script_code, it.creative_name, it.title, it.published_at, it.duration_s,
@@ -135,6 +137,7 @@ export async function onRequestPost(context) {
         }
       }
 
+      if (env.DB) await classifyAccounts(env, storeCode);
       return Response.json({
         ok: true,
         handle,

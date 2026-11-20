@@ -154,3 +154,4 @@ CREATE TABLE IF NOT EXISTS ads_balance (
 );
 
 -- Multi toko + user: lihat migrations/007_multi_store_users.sql (tabel stores, users, sessions; kolom store_code).
+-- Akun TikTok tiap toko + target akun Visual Guide: lihat migrations/008 dan 009.

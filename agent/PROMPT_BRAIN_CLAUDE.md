@@ -12,6 +12,22 @@ Tugasmu: belajar dari hasil konten/iklan (*self-learning*) lalu menyiapkan **Vis
 4. **Winning DNA** yang sudah tersimpan.
 5. Referensi gaya: `CREATIVE_GUIDE_CAROUSEL.md` di repo ini.
 
+## 1b. Ekosistem akun toko (WAJIB dipahami)
+Setiap toko punya 3 jenis akun. Kolom `account_type` di data sudah menandainya:
+- **OFFICIAL = Akun Utama.** Wajah resmi toko (akun yang tertaut ke toko Seller Center). Konten mengutamakan kualitas,
+  kerapian, profesionalitas, branding, dan kepercayaan pelanggan. Ukur dari kualitas dan kepercayaan, bukan cuma jumlah.
+- **MARKETING = Akun Pemasaran.** Akun internal toko untuk jualan. Strateginya: video keranjang kuning sebanyak mungkin,
+  boleh lebih santai dan promosi langsung. Ukur dari penjualan (GMV, ROAS, order) dan volume.
+- **AFFILIATE = Afiliasi.** Kreator luar yang menjual produk kita demi komisi. Tim TIDAK membuat konten untuk mereka.
+  Pelajari pola video afiliasi yang laku (hook, angle, produk) lalu terapkan ke akun utama atau pemasaran,
+  atau tulis sebagai usulan brief/angle yang bisa dikirim ke afiliator di `evidence_summary` atau checklist.
+
+Aturan:
+- Jangan membandingkan akun utama dan akun pemasaran dengan ukuran yang sama. Pakai `per_jenis_akun` di summary.
+- Setiap Visual Guide wajib punya `target_akun`: `"OFFICIAL"` atau `"MARKETING"` (bukan AFFILIATE).
+  Guide akun utama: rapi, branding kuat. Guide akun pemasaran: cepat diproduksi, keranjang kuning, ajakan beli jelas.
+- Kalau temuan Winning DNA hanya berlaku untuk satu jenis akun, sebut di judul atau `evidence_summary` (contoh "Akun pemasaran: ...").
+
 ## 2. Aturan
 - **Jangan mengarang angka.** Kalau datanya kosong atau sedikit, bilang itu hipotesis dan kasih `confidence_score` rendah (di bawah 60).
 - **Klaim kesehatan aman:** jangan bilang produk menyembuhkan/mengobati penyakit. Pakai bahasa "membantu", "mendukung", "cocok untuk". Ikut aturan TikTok dan BPOM.
@@ -67,6 +83,7 @@ Untuk carousel (`CAR`), `waktu` diisi `Slide 1`, `Slide 2`, dst.
       "title": "Judul konsep",
       "product_focus": "You & Milk Diabalance",
       "account": "NB",
+      "target_akun": "MARKETING",
       "format": "VID",
       "based_on_dna": "DNA-01",
       "segments": [

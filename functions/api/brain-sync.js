@@ -46,8 +46,8 @@ export async function onRequestPost(context) {
       const res = await env.DB.prepare(`
         INSERT INTO scripts_briefs
         (script_code, creative_name, title, product_focus, account, format, based_on_dna,
-         visual_guide_json, creative_guide, human_status, assigned_creator, store_code)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'waiting_check', ?10, ?11)
+         visual_guide_json, creative_guide, human_status, assigned_creator, store_code, target_account)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'waiting_check', ?10, ?11, ?12)
         ON CONFLICT(script_code) DO NOTHING
       `).bind(
         String(g.script_code).toUpperCase(),
@@ -60,7 +60,8 @@ export async function onRequestPost(context) {
         JSON.stringify(Array.isArray(g.segments) ? g.segments : []),
         g.notes || "",
         g.assigned_creator || "Tim Konten",
-        store
+        store,
+        ["OFFICIAL", "MARKETING"].includes(g.target_akun) ? g.target_akun : null
       ).run();
       guidesInserted += (res.meta && res.meta.changes) || 0;
     }

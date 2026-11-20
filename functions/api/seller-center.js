@@ -1,3 +1,5 @@
+import { classifyAccounts } from "../../lib/accounts.js";
+
 // Endpoint Pengolah Data Tokopedia & TikTok Shop Seller Center (Output ADS Result)
 // Menghitung Ranking Top-to-Bottom & Total Score otomatis di Cloudflare (0 Token AI)
 
@@ -72,6 +74,7 @@ export async function onRequestPost(context) {
           store
         ).run();
       }
+      await classifyAccounts(env, store);
     }
 
     return Response.json({ ok: true, count: scored.length, ranked: scored });

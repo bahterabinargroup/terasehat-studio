@@ -58,9 +58,10 @@ Jangan pernah mengirim data scrape satu toko dengan `store_code` toko lain.
         "identity_list": [semua identitas dari identity_list, field identity_type/identity_id/store_id/identity_authorized_bc_id],
         "keyword": item_id, "page_size": 1}`.
       Dari `item_list[0]` ambil `identity_info.display_name` → `tt_account_name`, `text` → `caption`,
-      `video_info.duration` → `duration_s`. `account_type` = `"OFFICIAL"` kalau `identity_info.identity_id`
-      = `official_identity_id` di `agent/ads_config.json`, selain itu `"AFFILIATE"`.
-      Kalau `item_list` kosong: `account_type: "AFFILIATE"` (kreator afiliasi luar). Nama akunnya nanti diisi langkah 1d.
+      `video_info.duration` → `duration_s`. `account_type` dari `identity_list` (gmv_max_identity_get):
+      `tts_tt_identity_source` = `TT_OFFICIAL` → `"OFFICIAL"` (akun utama); `TT_MARKETING` atau `identity_type` = `BC_AUTH_TT`
+      → `"MARKETING"` (akun pemasaran internal). Identitas lain, atau `item_list` kosong → `"AFFILIATE"` (kreator luar).
+      Dashboard juga mencocokkan ulang dengan daftar akun toko (tabel `store_accounts`), jadi kalau ragu kirim saja apa adanya.
    3. Untuk TIAP jendela tulis `/tmp/ads_KODE_N.json` = `{"store_code": "KODE", "period": "S..E", "window_days": N, "items": [ {"item_id": ...,
       <semua metrik di atas>, "tt_account_name"?, "account_type"?, "caption"?, "duration_s"?} ]}`
       (buang baris `item_id` = `-1`, itu kartu produk). **Salin SEMUA baris dari laporan, jangan diringkas.** Baris dengan `item_id` sama (video di beberapa kampanye) kirim apa adanya, dashboard yang menjumlahkan. Kirim **jendela 7 hari paling akhir**

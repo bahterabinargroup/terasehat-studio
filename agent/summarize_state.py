@@ -7,7 +7,7 @@ import json
 import re
 import sys
 
-KEEP = ["id", "script_code", "creative_name", "title", "published_at", "duration_s", "views", "shares",
+KEEP = ["id", "account_type", "creator_name", "script_code", "creative_name", "title", "published_at", "duration_s", "views", "shares",
         "saves", "er_pct", "outlier_score", "gmv_idr", "orders", "ad_spend_idr", "roas", "ctr_pct",
         "hook_3s", "total_score", "rank_tier", "claude_evaluation", "source", "ads_period",
         "product_clicks", "ad_cvr_pct", "hold_2s_pct", "hold_6s_pct", "completion_pct"]
@@ -27,6 +27,20 @@ def trs_numbers(rows, *keys):
                 yield int(m.group(1))
 
 
+def per_kind(ads):
+    out = {}
+    for kind in ("OFFICIAL", "MARKETING", "AFFILIATE"):
+        rows = [a for a in ads if a.get("account_type") == kind]
+        spend = sum(a.get("ad_spend_idr") or 0 for a in rows)
+        gmv = sum(a.get("gmv_idr") or 0 for a in rows)
+        out[kind] = {
+            "jumlah_video": len(rows), "biaya_iklan": spend, "gmv": gmv, "roas": round(gmv / spend, 2) if spend else 0,
+            "views": sum(a.get("views") or 0 for a in rows),
+            "top_3": [slim(a) for a in sorted(rows, key=lambda x: -(x.get("total_score") or 0))[:3]],
+        }
+    return out
+
+
 def main(path, store):
     d = json.load(open(path))
     all_ads, all_scripts = d.get("contents_ads", []), d.get("scripts_briefs", [])
@@ -42,6 +56,8 @@ def main(path, store):
         "store_code": store,
         "toko": {"kode": store, "nama": toko.get("name"), "akun_tiktok": toko.get("tiktok_handles"),
                  "iklan_tersambung": bool(toko.get("advertiser_id"))},
+        "akun_toko": [{k: a.get(k) for k in ("handle", "kind", "display_name")} for a in mine(d.get("store_accounts", []))],
+        "per_jenis_akun": per_kind(ads),
         "jumlah_konten": len(ads),
         "konten_dengan_data_penjualan": sum(1 for a in ads if (a.get("gmv_idr") or 0) > 0),
         "top_5": [slim(a, True) for a in ads[:5]],

@@ -7,8 +7,9 @@ export async function onRequestGet({ env, data }) {
     const where = (col = "store_code") => allowed === null ? "" : `WHERE ${col} IN (${allowed.map(() => "?").join(",") || "''"})`;
     const q = (sql) => { const st = env.DB.prepare(sql); return allowed && allowed.length ? st.bind(...allowed) : st; };
 
-    const [stores, ads, dna, scripts, checklist, radar, adsPeriod, budget, daily, balance] = await Promise.all([
+    const [stores, accounts, ads, dna, scripts, checklist, radar, adsPeriod, budget, daily, balance] = await Promise.all([
       q(`SELECT code, name, tiktok_handles, advertiser_id, store_id, sort FROM stores ${where("code")} ORDER BY sort`).all(),
+      q(`SELECT handle, store_code, kind, display_name FROM store_accounts ${where()} ORDER BY store_code, kind, handle`).all(),
       q(`SELECT * FROM contents_ads ${where()} ORDER BY total_score DESC, gmv_idr DESC`).all(),
       q(`SELECT * FROM winning_dna ${where()} ORDER BY confidence_score DESC`).all(),
       q(`SELECT * FROM scripts_briefs ${where()} ORDER BY created_at DESC`).all(),
@@ -25,6 +26,7 @@ export async function onRequestGet({ env, data }) {
       mode: "d1_live",
       user: publicUser(data.user),
       stores: (stores.results || []).map((s) => ({ ...s, tiktok_handles: JSON.parse(s.tiktok_handles || "[]") })),
+      store_accounts: accounts.results || [],
       contents_ads: ads.results || [],
       winning_dna: dna.results || [],
       scripts_briefs: scripts.results || [],
