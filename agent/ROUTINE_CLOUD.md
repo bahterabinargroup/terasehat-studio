@@ -33,6 +33,11 @@ Jangan pernah mengirim data scrape satu toko dengan `store_code` toko lain.
    - Setiap hari: **7**, **10**, dan **30** hari.
    - Hanya hari Senin (WIB) atau kalau prompt bilang "paksa semua periode": tambah **90** dan **180** hari.
    Jendela N hari = dari (kemarin − N + 1) sampai kemarin.
+   - **Setiap hari juga: bulan berjalan** (filter "per bulan" di dashboard) = dari tanggal 1 bulan milik *kemarin*
+     sampai kemarin. Contoh kemarin 2026-11-23 → `2026-11-01..2026-11-23`. Tanggal 1 tiap bulan otomatis
+     menutup bulan sebelumnya secara penuh. Tarik dengan cara yang sama seperti jendela lain (`page_size: 50`),
+     simpan ke `/tmp/ads_KODE_M.json` dengan `"month": "YYYY-MM"` (bukan `window_days`), dan kirim
+     **sebelum** jendela 7 hari.
 
    1. Sekali saja: `tool_execute` → `tool_name: "gmv_max_campaign_get"`, params
       `{"advertiser_id": ADV, "filtering": {"gmv_max_promotion_types": ["PRODUCT_GMV_MAX"]}, "page_size": 100,
@@ -68,7 +73,7 @@ Jangan pernah mengirim data scrape satu toko dengan `store_code` toko lain.
       (karena dia yang menandai iklan yang sudah tidak tayang):
       ```bash
       KODE=NB   # ulangi untuk tiap toko yang punya akun iklan
-      for N in 180 90 30 10 7; do [ -f /tmp/ads_${KODE}_$N.json ] && curl -sS -X POST "$DASHBOARD_URL/api/ads-sync" \
+      for N in 180 90 30 M 10 7; do [ -f /tmp/ads_${KODE}_$N.json ] && curl -sS -X POST "$DASHBOARD_URL/api/ads-sync" \
         -H "content-type: application/json" -H "x-pipeline-secret: $PIPELINE_SECRET" \
         --data-binary @/tmp/ads_${KODE}_$N.json -w " $KODE $N %{http_code}\n"; done
       ```

@@ -6,7 +6,7 @@
     tierFilter: "ALL",
     adFilter: "ALL",
     acctFilter: "ALL",
-    period: (() => { try { return Number(localStorage.getItem("TERASEHAT_PERIOD")) || 30; } catch (_) { return 30; } })(),
+    period: (() => { try { const v = localStorage.getItem("TERASEHAT_PERIOD") || ""; return /^M:\d{4}-\d{2}$/.test(v) ? v : Number(v) || 30; } catch (_) { return 30; } })(),
     store: (() => { try { return localStorage.getItem("TERASEHAT_STORE") || "ALL"; } catch (_) { return "ALL"; } })(),
     raw: JSON.parse(JSON.stringify(EMPTY)),
     data: JSON.parse(JSON.stringify(EMPTY)),
@@ -110,9 +110,41 @@
   // Konten organik masuk periode kalau diposting di dalam periode.
   // Video iklan masuk kalau ada biaya iklan di periode itu (angka iklan diambil dari laporan GMV Max periode tsb).
   const PERIODS = [[7, "7 hari"], [10, "10 hari"], [30, "30 hari"], [90, "3 bulan"], [180, "6 bulan"]];
+  // Periode bulanan disimpan sebagai "M:YYYY-MM"; laporan iklannya ada di ads_period_metrics dengan window_days = YYYYMM.
+  const BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const isMonth = (p) => typeof p === "string" && p.startsWith("M:");
+  const monthKey = (ym) => Number(ym.replace("-", ""));
+  const monthName = (ym) => `${BULAN[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+  // Bulan berjalan = bulan dari tanggal kemarin (WIB), sama seperti laporan iklan.
+  const yesterdayWib = () => new Date(Date.now() + 7 * 3600e3 - 86400e3).toISOString().slice(0, 10);
+  function monthOptions() {
+    const y = yesterdayWib();
+    const set = new Set();
+    let yy = Number(y.slice(0, 4)), mm = Number(y.slice(5, 7));
+    for (let i = 0; i < 6; i++) {
+      set.add(`${yy}-${String(mm).padStart(2, "0")}`);
+      if (--mm === 0) { mm = 12; yy--; }
+    }
+    (state.data.ads_period_metrics || []).forEach(m => {
+      if (m.window_days > 100000) set.add(`${String(m.window_days).slice(0, 4)}-${String(m.window_days).slice(4)}`);
+    });
+    return [...set].sort().reverse();
+  }
+  function periodLabel() {
+    const P = state.period;
+    if (isMonth(P)) {
+      const ym = P.slice(2);
+      return ym === yesterdayWib().slice(0, 7) ? `${monthName(ym)} (s/d kemarin)` : monthName(ym);
+    }
+    return ((PERIODS.find(p => p[0] === P) || [0, ""])[1]) + " terakhir";
+  }
   function periodSelect() {
-    return `<select class="input" id="sel-period" aria-label="Periode data">${PERIODS.map(([d, l]) =>
-      `<option value="${d}" ${state.period === d ? "selected" : ""}>${l} terakhir</option>`).join("")}</select>`;
+    return `<select class="input" id="sel-period" aria-label="Periode data">
+      <optgroup label="Rentang">${PERIODS.map(([d, l]) =>
+        `<option value="${d}" ${state.period === d ? "selected" : ""}>${l} terakhir</option>`).join("")}</optgroup>
+      <optgroup label="Per bulan">${monthOptions().map(ym =>
+        `<option value="M:${ym}" ${state.period === "M:" + ym ? "selected" : ""}>${monthName(ym)}</option>`).join("")}</optgroup>
+    </select>`;
   }
   function periodRows(src) {
     const D = src || state.data;
@@ -122,6 +154,29 @@
     const metrics = {};
     const byWin = {};
     (D.ads_period_metrics || []).forEach(m => { (byWin[m.window_days] = byWin[m.window_days] || {})[m.item_id] = m; });
+    if (isMonth(P)) {
+      const ym = P.slice(2);
+      const hasWindow = !!byWin[monthKey(ym)];
+      Object.assign(metrics, byWin[monthKey(ym)] || {});
+      const rows = [];
+      (D.contents_ads || []).forEach(a => {
+        const m = metrics[a.id];
+        const r = { ...a };
+        if (m) {
+          Object.assign(r, {
+            ad_spend_idr: m.cost, gmv_idr: m.gross_revenue, roas: m.roi, orders: m.orders, ctr_pct: m.ad_click_rate,
+            ad_cvr_pct: m.ad_conversion_rate, hold_2s_pct: m.hold_2s_pct, hold_6s_pct: m.hold_6s_pct,
+            completion_pct: m.completion_pct, ads_period: m.period,
+          });
+          if (Number(m.cost) >= 20000) { r.total_score = m.score; r.rank_tier = m.tier; }
+        } else if (a.source === "gmv_max" || Number(a.ad_spend_idr || 0) > 0) {
+          Object.assign(r, { ad_spend_idr: 0, gmv_idr: 0, roas: 0, orders: 0, ctr_pct: 0, hold_2s_pct: 0, hold_6s_pct: 0, completion_pct: 0 });
+        }
+        const posted = a.published_at && String(a.published_at).slice(0, 7) === ym;
+        if (posted || (m && Number(m.cost) > 0)) rows.push(r);
+      });
+      return { rows, hasWindow };
+    }
     const hasWindow = !!byWin[P];
     if (hasWindow) {
       PERIODS.map(p => p[0]).filter(w => w <= P).forEach(w => Object.assign(metrics, byWin[w] || {}));
@@ -148,9 +203,11 @@
     return { rows, hasWindow };
   }
   function periodNote(hasWindow) {
-    const label = (PERIODS.find(p => p[0] === state.period) || [0, ""])[1];
-    return hasWindow ? `Periode: ${label} terakhir.`
-      : `Periode: ${label} terakhir. Data iklan untuk periode ini belum ditarik, angka iklan masih pakai laporan 7 hari terakhir.`;
+    const label = periodLabel();
+    if (isMonth(state.period)) return hasWindow ? `Periode: ${label}.`
+      : `Periode: ${label}. Laporan iklan bulan ini belum ditarik, jadi angka iklan masih kosong (konten organik tetap tampil).`;
+    return hasWindow ? `Periode: ${label}.`
+      : `Periode: ${label}. Data iklan untuk periode ini belum ditarik, angka iklan masih pakai laporan 7 hari terakhir.`;
   }
   function tiktokUrl(a) {
     return String(a.video_url || `https://www.tiktok.com/@_/video/${a.id}`).replace("tiktok.com/@/video/", "tiktok.com/@_/video/");
@@ -283,7 +340,7 @@
     const list = state.stores.map(s => storeSummary(s.code));
     const max = (k) => Math.max(1, ...list.map(x => x[k] || 0));
     const bar = (v, m) => `<div class="cmp-bar"><span style="width:${Math.round((v || 0) / m * 100)}%"></span></div>`;
-    const label = (PERIODS.find(p => p[0] === state.period) || [0, ""])[1];
+    const label = periodLabel();
     const metric = (title, key, f) => `
       <div class="card">
         <h3 style="margin:0 0 12px">${title}</h3>
@@ -293,7 +350,7 @@
       <div class="topbar">
         <div>
           <h1>Perbandingan Akun</h1>
-          <p>Semua toko dibandingkan di periode yang sama. Periode: ${label} terakhir.</p>
+          <p>Semua toko dibandingkan di periode yang sama. Periode: ${label}.</p>
         </div>
         <div class="topbar-actions">${periodSelect()}</div>
       </div>
@@ -1020,7 +1077,7 @@
 
     const selPeriod = document.getElementById("sel-period");
     if (selPeriod) selPeriod.onchange = (e) => {
-      state.period = Number(e.target.value);
+      state.period = isMonth(e.target.value) ? e.target.value : Number(e.target.value);
       try { localStorage.setItem("TERASEHAT_PERIOD", String(state.period)); } catch (_) {}
       render();
     };

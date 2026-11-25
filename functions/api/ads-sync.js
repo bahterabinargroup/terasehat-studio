@@ -2,7 +2,7 @@
 // Dikirim oleh jadwal cloud Claude Brain. item_id = ID postingan TikTok, jadi otomatis
 // nyambung ke video yang sudah di-scrape (contents_ads.id = aweme_id).
 //
-// Body: { store_code: "NB", period: "2026-11-07..2026-11-13", window_days?: 7 | 10 | 30 | 90 | 180, items: [{ item_id, cost, gross_revenue, roi, orders,
+// Body: { store_code: "NB", period: "2026-11-07..2026-11-13", window_days?: 7 | 10 | 30 | 90 | 180, month?: "YYYY-MM", items: [{ item_id, cost, gross_revenue, roi, orders,
 //         product_impressions, product_clicks, ad_click_rate, ad_conversion_rate,
 //         ad_video_view_rate_2s, ad_video_view_rate_6s, ad_video_view_rate_p100,
 //         creative_delivery_status?, tt_account_name?, account_type? (OFFICIAL | MARKETING | AFFILIATE), caption?, duration_s? }] }
@@ -59,7 +59,11 @@ export async function onRequestPost({ request, env }) {
     const period = String(body.period || "");
     const store = String(body.store_code || "").toUpperCase();
     if (!store) return Response.json({ ok: false, error: "store_code wajib (kode toko, contoh NB)" }, { status: 400 });
-    const windowDays = [7, 10, 30, 90, 180].includes(Number(body.window_days)) ? Number(body.window_days) : 7;
+    // Laporan bulanan: body.month = "YYYY-MM" → disimpan dengan window_days = YYYYMM (mis. 202611).
+    const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(body.month || "")) ? String(body.month) : null;
+    if (body.month && !month) return Response.json({ ok: false, error: "month harus format YYYY-MM" }, { status: 400 });
+    const windowDays = month ? Number(month.replace("-", ""))
+      : [7, 10, 30, 90, 180].includes(Number(body.window_days)) ? Number(body.window_days) : 7;
     const avgRev = items.reduce((s, x) => s + n(x.gross_revenue), 0) / items.length;
 
     // Simpan metrik per jendela waktu (dipakai pilihan periode di dashboard).
@@ -91,7 +95,7 @@ export async function onRequestPost({ request, env }) {
       });
       for (let i = 0; i < ins.length; i += 40) await env.DB.batch(ins.slice(i, i + 40));
       await classifyAccounts(env, store);
-      return Response.json({ ok: true, store_code: store, count: items.length, period, window_days: windowDays });
+      return Response.json({ ok: true, store_code: store, count: items.length, period, window_days: windowDays, month });
     }
 
     const stmts = items.map((it) => {
