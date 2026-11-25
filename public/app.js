@@ -202,6 +202,28 @@
     });
     return { rows, hasWindow };
   }
+  // Total akun iklan (spend & GMV) dari laporan harian, untuk periode terpilih, berakhir kemarin (WIB).
+  function accountTotals(src) {
+    const D = src || state.data;
+    const end = yesterdayWib();
+    let start;
+    if (isMonth(state.period)) {
+      start = state.period.slice(2) + "-01";
+    } else {
+      start = new Date(Date.parse(end + "T00:00:00Z") - (state.period - 1) * 86400e3).toISOString().slice(0, 10);
+    }
+    const ym = isMonth(state.period) ? state.period.slice(2) : "";
+    const stop = ym && ym < end.slice(0, 7)
+      ? new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).toISOString().slice(0, 10) : end;
+    const rows = (D.ads_daily_spend || []).filter(d => d.date >= start && d.date <= stop);
+    const fmtD = (s) => `${Number(s.slice(8, 10))} ${BULAN[Number(s.slice(5, 7)) - 1].slice(0, 3)}`;
+    return {
+      days: rows.length,
+      cost: rows.reduce((s, d) => s + Number(d.cost || 0), 0),
+      gmv: rows.reduce((s, d) => s + Number(d.gross_revenue || 0), 0),
+      range: `${fmtD(start)}–${fmtD(stop)}`,
+    };
+  }
   function periodNote(hasWindow) {
     const label = periodLabel();
     if (isMonth(state.period)) return hasWindow ? `Periode: ${label}.`
@@ -317,8 +339,9 @@
   function storeSummary(code) {
     const D = dataFor(code);
     const { rows } = periodRows(D);
-    const gmv = rows.reduce((s, a) => s + Number(a.gmv_idr || 0), 0);
-    const spend = rows.reduce((s, a) => s + Number(a.ad_spend_idr || 0), 0);
+    const acct = accountTotals(D);
+    const gmv = acct.days ? acct.gmv : rows.reduce((s, a) => s + Number(a.gmv_idr || 0), 0);
+    const spend = acct.days ? acct.cost : rows.reduce((s, a) => s + Number(a.ad_spend_idr || 0), 0);
     const orders = rows.reduce((s, a) => s + Number(a.orders || 0), 0);
     const organic = rows.filter(a => a.source !== "gmv_max");
     const views = organic.reduce((s, a) => s + Number(a.views || 0), 0);
@@ -569,10 +592,15 @@
   function renderOverview() {
     const { rows: periodAds, hasWindow } = periodRows();
     const ads = [...periodAds].sort((a, b) => b.total_score - a.total_score);
-    const totalGmv = ads.reduce((s, a) => s + Number(a.gmv_idr || 0), 0);
-    const totalSpend = ads.reduce((s, a) => s + Number(a.ad_spend_idr || 0), 0);
+    const videoGmv = ads.reduce((s, a) => s + Number(a.gmv_idr || 0), 0);
+    const videoSpend = ads.reduce((s, a) => s + Number(a.ad_spend_idr || 0), 0);
     const totalOrders = ads.reduce((s, a) => s + Number(a.orders || 0), 0);
     const totalViews = ads.reduce((s, a) => s + Number(a.views || 0), 0);
+    // Kartu utama pakai total akun iklan per hari (sama dengan angka di TikTok Ads Manager).
+    // Kalau toko belum punya data harian akun iklan, jatuh ke jumlah per video.
+    const acct = accountTotals();
+    const totalGmv = acct.days ? acct.gmv : videoGmv;
+    const totalSpend = acct.days ? acct.cost : videoSpend;
     const roas = totalSpend > 0 ? (totalGmv / totalSpend).toFixed(2) : "0.00";
     const winningCount = ads.filter(a => a.rank_tier === "WINNING").length;
     const waitingScripts = (state.data.scripts_briefs || []).filter(s => s.human_status === "waiting_check").length;
@@ -647,14 +675,16 @@
 
       <div class="kpi-grid">
         <div class="kpi-card">
-          <div class="kpi-lbl">TOTAL GMV</div>
+          <div class="kpi-lbl">${acct.days ? "GMV IKLAN (TOTAL AKUN)" : "TOTAL GMV (PER VIDEO)"}</div>
           <div class="kpi-val" style="color:var(--naik)">${rp(totalGmv)}</div>
-          <div class="kpi-sub">📦 <b>${fmt(totalOrders)}</b> pesanan selesai</div>
+          <div class="kpi-sub">${acct.days
+            ? `${acct.range} · dari video teratas: <b>${rp(videoGmv)}</b>`
+            : `📦 <b>${fmt(totalOrders)}</b> pesanan dari video iklan`}</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-lbl">BIAYA IKLAN (AD SPEND)</div>
+          <div class="kpi-lbl">${acct.days ? "BIAYA IKLAN (TOTAL AKUN)" : "BIAYA IKLAN (PER VIDEO)"}</div>
           <div class="kpi-val">${rp(totalSpend)}</div>
-          <div class="kpi-sub">ROAS Gabungan: <b style="color:var(--lime)">${roas}x</b></div>
+          <div class="kpi-sub">ROAS: <b style="color:var(--lime)">${roas}x</b>${acct.days ? " · belum termasuk PPN 11%" : ""}</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-lbl">TOTAL VIEWS KONTEN</div>
