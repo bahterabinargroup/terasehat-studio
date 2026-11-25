@@ -1,5 +1,5 @@
 (function () {
-  const EMPTY = { store_accounts: [], contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], ads_period_metrics: [], ads_budget: [], ads_daily_spend: [], ads_balance: [] };
+  const EMPTY = { store_accounts: [], contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], ads_period_metrics: [], ads_budget: [], ads_daily_spend: [], ads_balance: [], store_sales_daily: [] };
 
   const state = {
     tab: "overview",
@@ -63,6 +63,8 @@
       state.user = d.user;
       state.stores = d.stores || [];
       Object.keys(EMPTY).forEach(k => { state.raw[k] = d[k] || []; });
+      state.salesSources = d.sales_sources || [];
+      state.salesSyncedAt = d.sales_synced_at || null;
       applyStore();
       state.auth = "ok";
       state.error = "";
@@ -224,6 +226,37 @@
       range: `${fmtD(start)}–${fmtD(stop)}`,
     };
   }
+  // Omzet total toko (dari sheet Dashboard Mitra) untuk periode terpilih. Sama seperti sheet, hari ini ikut dihitung.
+  // CAC & ROAS dihitung seperti sheet: biaya iklan termasuk PPN 11% dibanding omzet toko, di rentang yang sama.
+  function salesTotals(src) {
+    const D = src || state.data;
+    const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+    let start, stop = today;
+    if (isMonth(state.period)) {
+      const ym = state.period.slice(2);
+      start = ym + "-01";
+      if (ym < today.slice(0, 7)) stop = new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).toISOString().slice(0, 10);
+    } else {
+      start = new Date(Date.parse(today + "T00:00:00Z") - (state.period - 1) * 86400e3).toISOString().slice(0, 10);
+    }
+    const inRange = (d) => d.date >= start && d.date <= stop;
+    const rows = (D.store_sales_daily || []).filter(inRange);
+    const omzet = rows.reduce((s, d) => s + Number(d.omzet || 0), 0);
+    const spendRows = (D.ads_daily_spend || []).filter(inRange);
+    const spend = spendRows.reduce((s, d) => s + Number(d.cost || 0), 0) * 1.11;
+    // CAC/ROAS hanya untuk toko yang akun iklannya sudah tersambung (biar tidak bias saat lihat semua toko).
+    const adStores = new Set(spendRows.map(d => d.store_code));
+    const omzetAds = rows.filter(d => adStores.has(d.store_code)).reduce((s, d) => s + Number(d.omzet || 0), 0);
+    const fmtD = (s) => `${Number(s.slice(8, 10))} ${BULAN[Number(s.slice(5, 7)) - 1].slice(0, 3)}`;
+    return {
+      days: rows.length, omzet, spend,
+      orders: rows.reduce((s, d) => s + Number(d.orders || 0), 0),
+      qty: rows.reduce((s, d) => s + Number(d.qty || 0), 0),
+      cac: omzetAds > 0 ? spend / omzetAds : 0, roas: spend > 0 ? omzetAds / spend : 0,
+      partial: omzetAds < omzet && spend > 0,
+      range: `${fmtD(start)}–${fmtD(stop)}`,
+    };
+  }
   function periodNote(hasWindow) {
     const label = periodLabel();
     if (isMonth(state.period)) return hasWindow ? `Periode: ${label}.`
@@ -340,6 +373,7 @@
     const D = dataFor(code);
     const { rows } = periodRows(D);
     const acct = accountTotals(D);
+    const sales = salesTotals(D);
     const gmv = acct.days ? acct.gmv : rows.reduce((s, a) => s + Number(a.gmv_idr || 0), 0);
     const spend = acct.days ? acct.cost : rows.reduce((s, a) => s + Number(a.ad_spend_idr || 0), 0);
     const orders = rows.reduce((s, a) => s + Number(a.orders || 0), 0);
@@ -351,6 +385,7 @@
     const guides = D.scripts_briefs || [];
     return {
       code, name: storeName(code), gmv, spend, orders, roas: spend > 0 ? gmv / spend : 0,
+      omzet: sales.omzet, hasSales: sales.days > 0, cac: sales.cac,
       konten: rows.length, organik: organic.length, views,
       winning: rows.filter(a => a.rank_tier === "WINNING").length,
       adsAktif: rows.filter(a => ["DELIVERING", "LEARNING", "IN_QUEUE"].includes(a.delivery_status)).length,
@@ -379,10 +414,12 @@
       </div>
       <div class="card" style="overflow-x:auto">
         <table class="cmp-table">
-          <thead><tr><th>Toko</th><th>GMV iklan</th><th>Biaya iklan</th><th>ROAS</th><th>Pesanan</th><th>Video iklan aktif</th><th>Konten organik</th><th>Views organik</th><th>WINNING</th><th>Visual Guide (tunggu / jalan)</th><th>Budget hari ini</th><th>Saldo iklan</th></tr></thead>
+          <thead><tr><th>Toko</th><th>Omzet toko</th><th>CAC</th><th>GMV iklan</th><th>Biaya iklan</th><th>ROAS</th><th>Pesanan</th><th>Video iklan aktif</th><th>Konten organik</th><th>Views organik</th><th>WINNING</th><th>Visual Guide (tunggu / jalan)</th><th>Budget hari ini</th><th>Saldo iklan</th></tr></thead>
           <tbody>${list.map(x => `
             <tr>
               <td><b>${esc(x.name)}</b></td>
+              <td>${x.hasSales ? rp(x.omzet) : "–"}</td>
+              <td>${x.hasSales && x.cac ? (x.cac * 100).toFixed(1).replace(".", ",") + "%" : "–"}</td>
               <td>${x.hasAds ? rp(x.gmv) : "–"}</td>
               <td>${x.hasAds ? rp(x.spend) : "–"}</td>
               <td>${x.hasAds ? x.roas.toFixed(2) + "x" : "–"}</td>
@@ -400,6 +437,7 @@
       </div>
       ${renderKindSplit()}
       <div class="grid-2">
+        ${metric("Omzet total toko (sheet)", "omzet", x => x.hasSales ? rp(x.omzet) : "–")}
         ${metric("GMV dari iklan", "gmv", x => x.hasAds ? rp(x.gmv) : "–")}
         ${metric("Biaya iklan", "spend", x => x.hasAds ? rp(x.spend) : "–")}
         ${metric("ROAS", "roas", x => x.hasAds ? x.roas.toFixed(2) + "x" : "–")}
@@ -486,6 +524,7 @@
         </table>
       </div>
       ${renderStoreAccounts()}
+      ${renderSalesSources()}
       <div class="card">
         <h3 style="margin:0 0 12px">Tambah user</h3>
         <div class="user-form">
@@ -517,6 +556,28 @@
           <select class="input" id="sa-store">${state.stores.map(st => `<option value="${esc(st.code)}">${esc(st.name)}</option>`).join("")}</select>
           <select class="input" id="sa-kind"><option value="OFFICIAL">Akun utama</option><option value="MARKETING" selected>Akun pemasaran</option></select>
           <button class="btn btn-primary btn-sm" id="btn-acct-add">Tambah akun</button>
+        </div>
+      </div>`;
+  }
+
+  // Link sheet "Dashboard Mitra - Bahtera" per bulan (sumber omzet total toko).
+  function renderSalesSources() {
+    const src = state.salesSources || [];
+    const thisMonth = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 7);
+    const missing = !src.some(s => s.month === thisMonth);
+    return `
+      <div class="card">
+        <h3 style="margin:0 0 4px">Sheet omzet toko (Dashboard Mitra)</h3>
+        <div style="font-size:12px;color:var(--teks2);margin-bottom:12px">Omzet total toko dibaca otomatis dari tab ORDER TIKTOK (Jenis Order = Real), paling lambat tiap 30 menit saat dashboard dibuka. Sheet harus bisa dibuka "siapa saja yang punya link". Sheet baru tiap bulan: tempel link-nya di sini.${state.salesSyncedAt ? ` Terakhir dibaca ${esc(state.salesSyncedAt)} UTC.` : ""}</div>
+        ${missing ? `<div class="banner-error" style="font-size:13px;margin-bottom:10px">Link sheet bulan ${esc(monthName(thisMonth))} belum diisi, jadi omzet toko bulan ini belum terbaca.</div>` : ""}
+        <table class="cmp-table" style="margin-bottom:12px"><thead><tr><th>Bulan</th><th>Sheet</th></tr></thead><tbody>
+          ${src.map(s => `<tr><td>${esc(monthName(s.month))}</td><td><a href="https://docs.google.com/spreadsheets/d/${esc(s.sheet_id)}/edit" target="_blank" rel="noopener">Buka sheet ↗</a></td></tr>`).join("") || `<tr><td colspan="2">Belum ada</td></tr>`}
+        </tbody></table>
+        <div class="user-form">
+          <input class="input" id="ss-month" type="month" value="${thisMonth}">
+          <input class="input" id="ss-url" placeholder="Link Google Sheet bulan itu" style="min-width:280px">
+          <button class="btn btn-primary btn-sm" id="btn-ss-save">Simpan &amp; baca</button>
+          <button class="btn btn-sm" id="btn-ss-sync">Baca ulang sekarang</button>
         </div>
       </div>`;
   }
@@ -599,6 +660,7 @@
     // Kartu utama pakai total akun iklan per hari (sama dengan angka di TikTok Ads Manager).
     // Kalau toko belum punya data harian akun iklan, jatuh ke jumlah per video.
     const acct = accountTotals();
+    const sales = salesTotals();
     const totalGmv = acct.days ? acct.gmv : videoGmv;
     const totalSpend = acct.days ? acct.cost : videoSpend;
     const roas = totalSpend > 0 ? (totalGmv / totalSpend).toFixed(2) : "0.00";
@@ -674,6 +736,15 @@
       </div>
 
       <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-lbl">OMZET TOTAL TOKO</div>
+          <div class="kpi-val" style="color:var(--naik)">${sales.days ? rp(sales.omzet) : "–"}</div>
+          <div class="kpi-sub">${sales.days
+            ? `${sales.range} · ${fmt(sales.orders)} pesanan${sales.spend > 0
+                ? ` · CAC <b>${(sales.cac * 100).toFixed(1).replace(".", ",")}%</b> · ROAS <b>${sales.roas.toFixed(1).replace(".", ",")}</b>${sales.partial ? " (toko beriklan saja)" : ""}`
+                : ""}`
+            : "Belum ada data dari sheet Dashboard Mitra untuk periode ini"}</div>
+        </div>
         <div class="kpi-card">
           <div class="kpi-lbl">${acct.days ? "GMV IKLAN (TOTAL AKUN)" : "TOTAL GMV (PER VIDEO)"}</div>
           <div class="kpi-val" style="color:var(--naik)">${rp(totalGmv)}</div>
@@ -1235,6 +1306,19 @@
       try { await api("/api/store-accounts", { action: "remove", handle: b.dataset.acctRemove }); await loadState(); }
       catch (e) { alert("Gagal: " + e.message); }
     });
+    const ssShow = (r) => (r.result || []).map(x => x.error ? `${x.month}: ${x.error}` : `${x.month}: ${x.days} hari, omzet ${rp(x.omzet)}`).join("<br>");
+    const ssSave = document.getElementById("btn-ss-save");
+    if (ssSave) ssSave.onclick = async () => {
+      try {
+        const r = await api("/api/sales-sync", { month: document.getElementById("ss-month").value, sheet_url: document.getElementById("ss-url").value });
+        await loadState(); state.flash = "Sheet tersimpan.<br>" + ssShow(r); render();
+      } catch (e) { alert("Gagal: " + e.message); }
+    };
+    const ssSync = document.getElementById("btn-ss-sync");
+    if (ssSync) ssSync.onclick = async () => {
+      try { const r = await api("/api/sales-sync", {}); await loadState(); state.flash = "Omzet toko dibaca ulang.<br>" + ssShow(r); render(); }
+      catch (e) { alert("Gagal: " + e.message); }
+    };
     const create = document.getElementById("btn-user-create");
     if (create) create.onclick = async () => {
       const body = { action: "create", username: document.getElementById("nu-username").value, name: document.getElementById("nu-name").value,

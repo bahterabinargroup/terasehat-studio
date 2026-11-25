@@ -1,13 +1,17 @@
 // Semua data dashboard dalam satu panggilan, sudah dibatasi ke toko yang boleh dilihat user.
 import { storeList, publicUser } from "../../lib/auth.js";
+import { maybeSyncSales } from "../../lib/sales.js";
 
-export async function onRequestGet({ env, data }) {
+export async function onRequestGet({ env, data, waitUntil }) {
   try {
+    // Omzet toko dari sheet diperbarui di belakang layar (paling sering tiap 30 menit).
+    if (waitUntil) waitUntil(maybeSyncSales(env).catch(() => null));
     const allowed = storeList(data.user); // null = semua toko
     const where = (col = "store_code") => allowed === null ? "" : `WHERE ${col} IN (${allowed.map(() => "?").join(",") || "''"})`;
     const q = (sql) => { const st = env.DB.prepare(sql); return allowed && allowed.length ? st.bind(...allowed) : st; };
 
-    const [stores, accounts, ads, dna, scripts, checklist, radar, adsPeriod, budget, daily, balance] = await Promise.all([
+    const isOwner = ["owner", "system"].includes(data.user.role);
+    const [stores, accounts, ads, dna, scripts, checklist, radar, adsPeriod, budget, daily, balance, sales, sources, synced] = await Promise.all([
       q(`SELECT code, name, tiktok_handles, advertiser_id, store_id, sort FROM stores ${where("code")} ORDER BY sort`).all(),
       q(`SELECT handle, store_code, kind, display_name FROM store_accounts ${where()} ORDER BY store_code, kind, handle`).all(),
       q(`SELECT * FROM contents_ads ${where()} ORDER BY total_score DESC, gmv_idr DESC`).all(),
@@ -19,6 +23,9 @@ export async function onRequestGet({ env, data }) {
       q(`SELECT * FROM ads_budget ${where()} ORDER BY spend_today DESC`).all(),
       q(`SELECT * FROM ads_daily_spend ${where()} ORDER BY date DESC LIMIT 400`).all(),
       q(`SELECT * FROM ads_balance ${where()}`).all(),
+      q(`SELECT store_code, date, omzet, orders, qty FROM store_sales_daily ${where()} ORDER BY date DESC LIMIT 1500`).all(),
+      isOwner ? env.DB.prepare("SELECT month, sheet_id, updated_at FROM sales_sources ORDER BY month DESC").all() : Promise.resolve({ results: [] }),
+      env.DB.prepare("SELECT value FROM app_meta WHERE key = 'sales_synced_at'").first(),
     ]);
 
     return Response.json({
@@ -36,6 +43,9 @@ export async function onRequestGet({ env, data }) {
       ads_budget: budget.results || [],
       ads_daily_spend: daily.results || [],
       ads_balance: balance.results || [],
+      store_sales_daily: sales.results || [],
+      sales_sources: sources.results || [],
+      sales_synced_at: synced ? synced.value : null,
     });
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });

@@ -5,7 +5,7 @@ import { safeEqual, userFromSession } from "../../lib/auth.js";
 
 const PUBLIC = ["/api/login", "/api/logout"];
 // Endpoint penerima data otomatis: hanya jadwal cloud atau owner.
-const SYNC = ["/api/ads-sync", "/api/budget-sync", "/api/brain-sync", "/api/scrape", "/api/enrich", "/api/seller-center"];
+const SYNC = ["/api/ads-sync", "/api/budget-sync", "/api/brain-sync", "/api/scrape", "/api/enrich", "/api/seller-center", "/api/sales-sync"];
 
 export async function onRequest(context) {
   const { request, env, next, data } = context;
