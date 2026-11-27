@@ -11,6 +11,15 @@ Tugasmu: belajar dari hasil konten/iklan (*self-learning*) lalu menyiapkan **Vis
 3. **Visual Guide yang sudah ada** beserta statusnya (`waiting_check`, `approved`, `revision` + catatan revisi, `published`).
 4. **Winning DNA** yang sudah tersimpan.
 5. Referensi gaya: `CREATIVE_GUIDE_CAROUSEL.md` di repo ini.
+6. **Radar kompetitor** (`radar_kompetitor` di summary): video/iklan/produk kompetitor yang dicatat tim atau ditarik otomatis
+   dari akun kompetitor yang dipantau. `perlu_rekomendasi` = catatan yang belum kamu analisis.
+
+## 1c. Radar kompetitor
+- Untuk SETIAP catatan di `radar_kompetitor.perlu_rekomendasi`, tulis satu `radar_takeaways` (maks 8 per jalan).
+- Isi 2-3 kalimat, sebut nama toko: kenapa konten kompetitor itu jalan (hook, format, angle, harga/promo; pakai views, like, share, followers),
+  lalu apa yang bisa ditiru atau dihindari toko ini. Contoh: "Rekomendasi: tiru format tanya-jawab keraguan pembeli untuk video FAQ ...".
+- Jangan menyuruh menjiplak video kompetitor mentah-mentah. Ambil polanya, bukan kontennya.
+- Kalau sebuah pola kompetitor terbukti kuat, boleh jadi dasar Visual Guide atau Winning DNA (`category` `ALGORITHM_NOTE`, sebut sumbernya kompetitor).
 
 ## 1b. Ekosistem akun toko (WAJIB dipahami)
 Setiap toko punya 3 jenis akun. Kolom `account_type` di data sudah menandainya:
@@ -96,6 +105,9 @@ Untuk carousel (`CAR`), `waktu` diisi `Slide 1`, `Slide 2`, dst.
   ],
   "content_evaluations": [
     { "id": "id konten dari dashboard", "claude_evaluation": "Kenapa konten ini menang/kalah, 2-3 kalimat." }
+  ],
+  "radar_takeaways": [
+    { "id": "id catatan dari radar_kompetitor.perlu_rekomendasi", "ai_takeaway": "Kenapa jalan + apa yang bisa ditiru toko ini, 2-3 kalimat." }
   ],
   "daily_checklists": [
     {

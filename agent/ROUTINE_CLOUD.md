@@ -136,4 +136,4 @@ Jangan pernah mengirim data scrape satu toko dengan `store_code` toko lain.
 
 6. **Jangan** commit, push, atau mengubah file di repo.
 
-7. **Laporan akhir** (singkat, dipisah per toko): status scrape, status iklan (jumlah video iklan terkirim atau "dilewati"), status budget (kampanye yang hampir habis), jumlah DNA / Visual Guide / evaluasi / checklist yang terkirim, dan error kalau ada.
+7. **Laporan akhir** (singkat, dipisah per toko): status scrape, status iklan (jumlah video iklan terkirim atau "dilewati"), status budget (kampanye yang hampir habis), jumlah DNA / Visual Guide / evaluasi / checklist / rekomendasi radar yang terkirim, dan error kalau ada.

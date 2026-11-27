@@ -1,11 +1,12 @@
 (function () {
-  const EMPTY = { store_accounts: [], contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], ads_period_metrics: [], ads_budget: [], ads_daily_spend: [], ads_balance: [], store_sales_daily: [] };
+  const EMPTY = { store_accounts: [], contents_ads: [], winning_dna: [], scripts_briefs: [], daily_checklists: [], competitor_radar: [], competitors: [], ads_period_metrics: [], ads_budget: [], ads_daily_spend: [], ads_balance: [], store_sales_daily: [] };
 
   const state = {
     tab: "overview",
     tierFilter: "ALL",
     adFilter: "ALL",
     acctFilter: "ALL",
+    radarStore: "ALL",
     period: (() => { try { const v = localStorage.getItem("TERASEHAT_PERIOD") || ""; return /^M:\d{4}-\d{2}$/.test(v) ? v : Number(v) || 30; } catch (_) { return 30; } })(),
     store: (() => { try { return localStorage.getItem("TERASEHAT_STORE") || "ALL"; } catch (_) { return "ALL"; } })(),
     raw: JSON.parse(JSON.stringify(EMPTY)),
@@ -709,8 +710,8 @@
         <div class="kpi-grid" style="margin-bottom:0">
           <div class="kpi-card" style="cursor:pointer;border:1px solid var(--garis2)" data-go-tab="radar">
             <div class="kpi-lbl">1. INPUT DATA</div>
-            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Seller Center + ScrapeCreators</div>
-            <div class="kpi-sub">TikTok Ads Lib • TikTok Shop • Creator Emails</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">TikTok Ads + ScrapeCreators</div>
+            <div class="kpi-sub">Konten toko • Radar kompetitor • Omzet sheet</div>
           </div>
           <div class="kpi-card" style="cursor:pointer;border:1px solid var(--garis2)" data-go-tab="dna">
             <div class="kpi-lbl">2. AI AGENT (BRAIN)</div>
@@ -1106,32 +1107,162 @@
     `;
   }
 
-  // 6. RADAR SCRAPECREATORS (TIKTOK ADS LIBRARY, TIKTOK SHOP, FIND CREATOR EMAILS)
+  // 6. RADAR KOMPETITOR: catatan manual (+ Tambah) dan akun kompetitor yang dipantau otomatis 1x sehari.
+  const RADAR_SRC = {
+    ORGANIC: "🎬 Konten Organik", ADS: "📣 Iklan", PRODUCT: "🛒 Produk TikTok Shop", CREATOR: "🤝 Kontak Kreator",
+    TIKTOK_ORGANIC: "🎬 Konten Organik", TIKTOK_ADS_LIB: "📣 Iklan", TIKTOK_SHOP: "🛒 Produk TikTok Shop", CREATOR_EMAIL: "🤝 Kontak Kreator",
+  };
+  const short = (n) => {
+    n = Number(n || 0);
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(".0", "").replace(".", ",") + "jt";
+    if (n >= 1e4) return Math.round(n / 1e3) + "rb";
+    return fmt(n);
+  };
+  function radarStats(r) {
+    const parts = [];
+    if (r.views) parts.push(short(r.views) + " views");
+    if (r.likes) parts.push(fmt(r.likes) + " like");
+    if (r.shares) parts.push(fmt(r.shares) + " share");
+    if (r.followers) parts.push(short(r.followers) + " followers");
+    return parts.join(" · ") || esc(r.metrics_summary || "");
+  }
   function renderRadar() {
-    const radars = state.data.competitor_radar || [];
-    const cardsHtml = radars.map(r => `
+    const all = state.data.competitor_radar || [];
+    const comps = state.data.competitors || [];
+    const multi = state.store === "ALL" && state.stores.length > 1;
+    const rs = multi && state.radarStore && state.radarStore !== "ALL" ? state.radarStore : "ALL";
+    const rows = rs === "ALL" ? all : all.filter(r => r.store_code === rs);
+    const tabs = multi ? `
+      <div class="seg" style="margin-bottom:16px">
+        <button class="seg-btn ${rs === "ALL" ? "active" : ""}" data-radar-store="ALL">Semua toko <span class="seg-count">${all.length}</span></button>
+        ${state.stores.map(s => `<button class="seg-btn ${rs === s.code ? "active" : ""}" data-radar-store="${esc(s.code)}">${esc(s.code)} <span class="seg-count">${all.filter(r => r.store_code === s.code).length}</span></button>`).join("")}
+      </div>` : "";
+    const card = (r) => `
       <div class="brief-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-          <span class="badge badge-purple">📡 SUMBER: ${r.source}</span>
-          <span style="font-size:12px;color:var(--teks2)">${r.metrics_summary}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span class="badge badge-purple">${RADAR_SRC[r.source] || esc(r.source)}</span>
+            <span class="badge badge-account">${esc(r.store_code)}</span>
+            ${r.added_by === "Otomatis" ? `<span class="badge badge-mid">Dipantau otomatis</span>` : ""}
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:12.5px;color:var(--teks2)">${radarStats(r)}</span>
+            <button class="btn btn-sm btn-secondary" data-radar-edit="${esc(r.id)}">Edit</button>
+          </div>
         </div>
-        <h3 style="margin:0 0 4px;font-size:15.5px">${r.brand_or_creator}</h3>
-        ${r.contact_email && r.contact_email !== "-" ? `<div style="font-size:12.5px;color:var(--naik);margin-bottom:6px">📧 <b>Email Afiliasi/Kreator:</b> <code>${r.contact_email}</code></div>` : ""}
-        <div style="background:var(--l2);padding:10px 12px;border-radius:var(--r-sm);margin:8px 0;font-weight:500">${r.title_or_hook}</div>
-        <div style="font-size:12.5px;color:var(--lime)">💡 <b>Rekomendasi untuk Terasehat:</b> ${r.ai_takeaway}</div>
-      </div>
-    `).join("");
-
+        <h3 style="margin:0 0 4px;font-size:16px">${esc(r.brand_or_creator)}${r.handle ? ` <span style="color:var(--teks2);font-weight:500">(@${esc(r.handle)})</span>` : ""}</h3>
+        ${r.contact_email ? `<div style="font-size:12.5px;margin-bottom:6px">📧 <code>${esc(r.contact_email)}</code></div>` : ""}
+        ${r.title_or_hook ? `<div style="background:var(--l2);padding:10px 12px;border-radius:var(--r-sm);margin:8px 0;font-weight:500">${esc(r.title_or_hook)}</div>` : ""}
+        <div style="font-size:13px;line-height:1.55">${r.ai_takeaway
+          ? `💡 <b>Rekomendasi untuk ${esc(storeName(r.store_code))}:</b> ${esc(r.ai_takeaway)}`
+          : `<span style="color:var(--teks2)">💡 Rekomendasi diisi Claude di jadwal berikutnya (06, 12, 18, 21 WIB).</span>`}</div>
+        ${r.ref_url ? `<a href="${esc(r.ref_url)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;font-size:13px;color:var(--color-ink)">Buka sumber ↗</a>` : ""}
+      </div>`;
+    const watchStores = visibleStores();
+    const watch = `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">
+          <h3 style="margin:0;font-size:15px">Akun kompetitor yang dipantau</h3>
+          <span style="font-size:12px;color:var(--teks2)">Ditarik otomatis 1x sehari: 2 video terlaris dari 10 video terbaru · 1 kredit ScrapeCreators per akun</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0">
+          ${comps.length ? comps.map(c => `<span class="badge badge-purple" title="${c.last_error ? "Gagal: " + esc(c.last_error) : c.last_scan_at ? "Terakhir ditarik " + esc(c.last_scan_at) + " UTC" : "Belum ditarik"}">
+              ${watchStores.length > 1 ? esc(c.store_code) + " · " : ""}@${esc(c.handle)}${c.name ? " (" + esc(c.name) + ")" : ""}${c.last_error ? " ⚠️" : ""}
+              <button data-watch-remove="${c.id}" aria-label="Berhenti pantau @${esc(c.handle)}" style="border:0;background:none;cursor:pointer;padding:0 0 0 4px;color:inherit">✕</button>
+            </span>`).join("") : `<span style="font-size:13px;color:var(--teks2)">Belum ada. Tambahkan akun TikTok kompetitor terbaik, Claude akan menganalisis videonya.</span>`}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${watchStores.length > 1 ? `<select class="input" id="cw-store" style="max-width:180px">${watchStores.map(s => `<option value="${esc(s.code)}">${esc(s.name)}</option>`).join("")}</select>` : `<input type="hidden" id="cw-store" value="${esc((watchStores[0] || {}).code || "")}">`}
+          <input class="input" id="cw-handle" placeholder="@username atau link akun TikTok" style="max-width:260px">
+          <input class="input" id="cw-name" placeholder="Nama brand (opsional)" style="max-width:200px">
+          <button class="btn" id="btn-watch-add">+ Pantau</button>
+        </div>
+      </div>`;
     return `
       <div class="topbar">
         <div>
           <h1>Radar Kompetitor</h1>
-          <p>Sesuai dokumentasi ScrapeCreators di diagram: memantau iklan kompetitor, produk naik di TikTok Shop, dan mencari email kreator afiliasi.</p>
+          <p>Catat iklan kompetitor, produk yang sedang naik di TikTok Shop, dan kontak kreator afiliasi. Claude memakai catatan ini sebagai bahan belajar dan menulis rekomendasinya.</p>
         </div>
+        <button class="btn btn-primary" data-radar-edit="">+ Tambah</button>
       </div>
-
-      ${cardsHtml}
+      ${watch}
+      ${tabs}
+      ${rows.length ? rows.map(card).join("") : `<div class="card" style="color:var(--teks2)">Belum ada catatan kompetitor. Klik <b>+ Tambah</b> atau pantau akun kompetitor di atas.</div>`}
     `;
+  }
+
+  function openRadarForm(id) {
+    const r = id ? (state.raw.competitor_radar || []).find(x => x.id === id) : null;
+    const stores = r ? state.stores : visibleStores();
+    const v = (k) => esc(r ? (r[k] ?? "") : "");
+    const n = (k) => r && r[k] ? Number(r[k]) : "";
+    const src = r ? ({ TIKTOK_ORGANIC: "ORGANIC", TIKTOK_ADS_LIB: "ADS", TIKTOK_SHOP: "PRODUCT", CREATOR_EMAIL: "CREATOR" }[r.source] || r.source) : "ORGANIC";
+    const lbl = (t, inner) => `<label class="radar-field" style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--teks2);margin-bottom:10px">${t}${inner}</label>`;
+    document.getElementById("app-modal-content").innerHTML = `
+      <h2 style="margin:0 0 16px;font-size:18px">${r ? "Edit catatan kompetitor" : "Tambah catatan kompetitor"}</h2>
+      <div class="grid-2" style="gap:0 12px">
+        ${lbl("Toko", `<select class="input" id="rf-store">${stores.map(s => `<option value="${esc(s.code)}" ${(r ? r.store_code : state.radarStore) === s.code ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select>`)}
+        ${lbl("Jenis", `<select class="input" id="rf-source">${["ORGANIC", "ADS", "PRODUCT", "CREATOR"].map(k => `<option value="${k}" ${src === k ? "selected" : ""}>${RADAR_SRC[k]}</option>`).join("")}</select>`)}
+        ${lbl("Nama brand / kreator *", `<input class="input" id="rf-brand" value="${v("brand_or_creator")}" placeholder="Tropicana Slim">`)}
+        ${lbl("Username TikTok", `<input class="input" id="rf-handle" value="${v("handle")}" placeholder="@tropicanaslim">`)}
+      </div>
+      ${lbl("Hook / judul / produk", `<input class="input" id="rf-hook" value="${v("title_or_hook")}" placeholder="Kalimat pembuka video, judul iklan, atau nama produk">`)}
+      <div class="grid-2" style="gap:0 12px">
+        ${lbl("Views", `<input class="input" id="rf-views" inputmode="numeric" value="${n("views")}">`)}
+        ${lbl("Like", `<input class="input" id="rf-likes" inputmode="numeric" value="${n("likes")}">`)}
+        ${lbl("Share", `<input class="input" id="rf-shares" inputmode="numeric" value="${n("shares")}">`)}
+        ${lbl("Followers", `<input class="input" id="rf-followers" inputmode="numeric" value="${n("followers")}">`)}
+      </div>
+      ${lbl("Link sumber", `<input class="input" id="rf-url" value="${v("ref_url")}" placeholder="https://www.tiktok.com/@.../video/...">`)}
+      ${lbl("Email kontak (untuk kreator)", `<input class="input" id="rf-email" value="${v("contact_email")}">`)}
+      ${lbl("Rekomendasi (kosongkan biar Claude yang isi)", `<textarea class="input" id="rf-take" rows="3" style="height:auto;padding-top:8px">${v("ai_takeaway")}</textarea>`)}
+      <div style="display:flex;justify-content:space-between;gap:8px;margin-top:8px">
+        <div>${r ? `<button class="btn" id="rf-delete" style="color:var(--color-ember)">Hapus</button>` : ""}</div>
+        <div style="display:flex;gap:8px"><button class="btn" id="rf-cancel">Batal</button><button class="btn btn-primary" id="rf-save">Simpan</button></div>
+      </div>`;
+    const modal = document.getElementById("app-modal");
+    modal.classList.add("open");
+    const close = () => modal.classList.remove("open");
+    const g = (k) => document.getElementById(k).value;
+    document.getElementById("rf-cancel").onclick = close;
+    document.getElementById("rf-save").onclick = async (e) => {
+      e.target.disabled = true;
+      try {
+        await api("/api/radar", { action: "save", id: r ? r.id : "", store_code: g("rf-store"), source: g("rf-source"),
+          brand_or_creator: g("rf-brand"), handle: g("rf-handle"), title_or_hook: g("rf-hook"), views: g("rf-views"),
+          likes: g("rf-likes"), shares: g("rf-shares"), followers: g("rf-followers"), ref_url: g("rf-url"),
+          contact_email: g("rf-email"), ai_takeaway: g("rf-take") });
+        close(); await loadState();
+      } catch (err) { e.target.disabled = false; alert("Gagal simpan: " + err.message); }
+    };
+    const del = document.getElementById("rf-delete");
+    if (del) del.onclick = async () => {
+      if (!confirm(`Hapus catatan ${r.brand_or_creator}?`)) return;
+      try { await api("/api/radar", { action: "delete", id: r.id }); close(); await loadState(); }
+      catch (err) { alert("Gagal hapus: " + err.message); }
+    };
+  }
+
+  function bindRadar(container) {
+    container.querySelectorAll("[data-radar-store]").forEach(b => b.onclick = () => { state.radarStore = b.dataset.radarStore; render(); });
+    container.querySelectorAll("[data-radar-edit]").forEach(b => b.onclick = () => openRadarForm(b.dataset.radarEdit));
+    container.querySelectorAll("[data-watch-remove]").forEach(b => b.onclick = async () => {
+      const c = (state.data.competitors || []).find(x => x.id === Number(b.dataset.watchRemove));
+      if (!c || !confirm(`Berhenti memantau @${c.handle}? Catatan yang sudah ada tetap disimpan.`)) return;
+      try { await api("/api/radar", { action: "watch_remove", id: c.id }); await loadState(); }
+      catch (e) { alert("Gagal: " + e.message); }
+    });
+    const add = document.getElementById("btn-watch-add");
+    if (add) add.onclick = async () => {
+      add.disabled = true; add.textContent = "Menarik video...";
+      try {
+        const r = await api("/api/radar", { action: "watch_add", store_code: document.getElementById("cw-store").value,
+          handle: document.getElementById("cw-handle").value, name: document.getElementById("cw-name").value });
+        await loadState();
+        if (r.scan && r.scan.error) alert("Akun disimpan, tapi video belum bisa ditarik: " + r.scan.error);
+      } catch (e) { alert("Gagal: " + e.message); add.disabled = false; add.textContent = "+ Pantau"; }
+    };
   }
 
   function render() {
@@ -1166,6 +1297,7 @@
     }
     bindAuthForms();
     bindUserAdmin(container);
+    bindRadar(container);
 
     document.querySelectorAll("[data-go-tab]").forEach(el => {
       el.onclick = () => {

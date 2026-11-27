@@ -513,3 +513,6 @@ body.auth-mode .shell { grid-template-columns: 1fr; }
 .acct-list { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 .acct-x { border: 0; background: none; cursor: pointer; padding: 0 0 0 4px; color: var(--color-mid-gray); font-size: 14px; line-height: 1; }
 .acct-x:hover { color: var(--color-ember); }
+
+/* Form Radar Kompetitor */
+.radar-field .input { width: 100%; max-width: none; }

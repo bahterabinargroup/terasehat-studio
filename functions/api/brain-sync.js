@@ -15,6 +15,7 @@ export async function onRequestPost(context) {
     const guideList = payload.visual_guides || [];
     const evalList = payload.content_evaluations || [];
     const checkList = payload.daily_checklists || [];
+    const radarList = payload.radar_takeaways || [];
     const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10); // tanggal WIB
     let guidesInserted = 0;
 
@@ -89,10 +90,19 @@ export async function onRequestPost(context) {
       ).run();
     }
 
+    // Rekomendasi Claude untuk catatan Radar Kompetitor toko ini.
+    let radarUpdated = 0;
+    for (const r of radarList) {
+      if (!r || !r.id || !r.ai_takeaway) continue;
+      const res = await env.DB.prepare("UPDATE competitor_radar SET ai_takeaway = ?1, updated_at = datetime('now') WHERE id = ?2 AND store_code = ?3")
+        .bind(String(r.ai_takeaway).slice(0, 1500), String(r.id), store).run();
+      radarUpdated += (res.meta && res.meta.changes) || 0;
+    }
+
     return Response.json({
       ok: true,
       store_code: store,
-      updated: { dna: dnaList.length, visual_guides: guidesInserted, evaluations: evalList.length, checklists: checkList.length }
+      updated: { dna: dnaList.length, visual_guides: guidesInserted, evaluations: evalList.length, checklists: checkList.length, radar: radarUpdated }
     });
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });

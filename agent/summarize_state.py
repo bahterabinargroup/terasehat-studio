@@ -41,6 +41,15 @@ def per_kind(ads):
     return out
 
 
+def radar(rows):
+    """Catatan kompetitor: yang belum punya rekomendasi dulu (wajib diisi Brain), lalu yang terbaru sebagai bahan belajar."""
+    keys = ("id", "source", "brand_or_creator", "handle", "title_or_hook", "views", "likes", "shares", "followers", "ai_takeaway", "added_by")
+    slim_r = lambda r: {k: r.get(k) for k in keys if r.get(k) not in (None, "", 0)}
+    todo = [slim_r(r) for r in rows if not (r.get("ai_takeaway") or "").strip()][:8]
+    done = [slim_r(r) for r in sorted([r for r in rows if (r.get("ai_takeaway") or "").strip()], key=lambda r: -(r.get("views") or 0))[:5]]
+    return {"perlu_rekomendasi": todo, "sudah_dianalisis": done}
+
+
 def main(path, store):
     d = json.load(open(path))
     all_ads, all_scripts = d.get("contents_ads", []), d.get("scripts_briefs", [])
@@ -78,7 +87,7 @@ def main(path, store):
             "total_biaya": sum(a.get("ad_spend_idr") or 0 for a in ads_paid),
             "total_omzet": sum(a.get("gmv_idr") or 0 for a in ads_paid),
         },
-        "radar_kompetitor": mine(d.get("competitor_radar", []))[:5],
+        "radar_kompetitor": radar(mine(d.get("competitor_radar", []))),
         "nomor_trs_berikutnya": max([146] + nums) + 1,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=1))
