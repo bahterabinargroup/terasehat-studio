@@ -16,6 +16,7 @@ export async function onRequestPost(context) {
     const evalList = payload.content_evaluations || [];
     const checkList = payload.daily_checklists || [];
     const radarList = payload.radar_takeaways || [];
+    const craftList = payload.craft_prompts || [];
     const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10); // tanggal WIB
     let guidesInserted = 0;
 
@@ -99,10 +100,20 @@ export async function onRequestPost(context) {
       radarUpdated += (res.meta && res.meta.changes) || 0;
     }
 
+    // Prompt video yang disempurnakan Claude dari pilihan Craft Prompt tim.
+    let craftUpdated = 0;
+    for (const c of craftList) {
+      if (!c || !c.script_code || !c.prompt) continue;
+      const res = await env.DB.prepare(
+        "UPDATE scripts_briefs SET craft_prompt = ?1, craft_status = 'claude', craft_updated_at = datetime('now') WHERE script_code = ?2 AND store_code = ?3 AND craft_json IS NOT NULL"
+      ).bind(String(c.prompt).slice(0, 6000), String(c.script_code).toUpperCase(), store).run();
+      craftUpdated += (res.meta && res.meta.changes) || 0;
+    }
+
     return Response.json({
       ok: true,
       store_code: store,
-      updated: { dna: dnaList.length, visual_guides: guidesInserted, evaluations: evalList.length, checklists: checkList.length, radar: radarUpdated }
+      updated: { dna: dnaList.length, visual_guides: guidesInserted, evaluations: evalList.length, checklists: checkList.length, radar: radarUpdated, craft_prompts: craftUpdated }
     });
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });

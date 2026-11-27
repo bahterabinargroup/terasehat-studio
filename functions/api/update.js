@@ -1,6 +1,7 @@
 // Aksi dari dashboard: Approve / Revisi / Tayang untuk Visual Guide, centang Daily Checklist, dan isi saldo iklan.
 // Tiap aksi dicek: user hanya boleh mengubah data toko yang boleh dia lihat.
 import { canSeeStore } from "../../lib/auth.js";
+import { cleanCraft, buildCraftPrompt } from "../../lib/craft.js";
 
 const SCRIPT_STATUSES = ["waiting_check", "approved", "revision", "filming", "published"];
 const forbidden = () => Response.json({ ok: false, error: "Kamu tidak punya akses ke toko ini" }, { status: 403 });
@@ -19,6 +20,22 @@ export async function onRequestPost({ request, env, data }) {
         "UPDATE scripts_briefs SET human_status = ?1, human_notes = COALESCE(?2, human_notes) WHERE script_code = ?3"
       ).bind(b.status, b.notes ?? null, String(b.script_code || "")).run();
       return Response.json({ ok: true });
+    }
+
+    // Craft Prompt: simpan pilihan arahan, langsung susun draf prompt. Claude menyempurnakannya di jadwal berikutnya.
+    if (b.type === "craft_save") {
+      const g = await env.DB.prepare("SELECT * FROM scripts_briefs WHERE script_code = ?1").bind(String(b.script_code || "")).first();
+      if (!g) return Response.json({ ok: false, error: "Visual Guide tidak ada" }, { status: 404 });
+      if (!canSeeStore(user, g.store_code)) return forbidden();
+      const craft = cleanCraft(b.craft || {});
+      const dna = g.based_on_dna
+        ? await env.DB.prepare("SELECT id, formula_hook, visual_guideline FROM winning_dna WHERE id = ?1").bind(g.based_on_dna).first()
+        : null;
+      const prompt = buildCraftPrompt(g, craft, dna);
+      await env.DB.prepare(
+        "UPDATE scripts_briefs SET craft_json = ?1, craft_prompt = ?2, craft_status = 'draft', craft_updated_at = datetime('now') WHERE script_code = ?3"
+      ).bind(JSON.stringify(craft), prompt, g.script_code).run();
+      return Response.json({ ok: true, craft, prompt, craft_status: "draft" });
     }
 
     if (b.type === "checklist") {

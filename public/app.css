@@ -516,3 +516,21 @@ body.auth-mode .shell { grid-template-columns: 1fr; }
 
 /* Form Radar Kompetitor */
 .radar-field .input { width: 100%; max-width: none; }
+
+/* Craft Prompt */
+.modal.modal-wide { max-width: 1180px; }
+.craft-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.craft-grid > div:last-child { position: sticky; top: 0; }
+.craft-group { margin-bottom: 14px; }
+.craft-label { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+.craft-label span { font-weight: 400; color: var(--color-mid-gray); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--color-hairline); background: var(--color-paper); color: var(--color-ink); border-radius: 999px; padding: 7px 14px; font-size: 13.5px; cursor: pointer; font-family: inherit; }
+.chip:hover { background: var(--color-canvas); }
+.chip.on { background: var(--color-ink); color: #fafafa; border-color: var(--color-ink); }
+.craft-text { width: 100%; max-width: none; height: auto; padding-top: 8px; }
+.craft-panel { border: 1px solid var(--color-hairline); border-radius: var(--radius-cards); padding: 16px; background: var(--color-canvas); }
+.craft-prompt { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.55; color: var(--color-ink); margin: 0; max-height: 260px; overflow: auto; }
+.craft-prompt.full { max-height: none; }
+.craft-status { font-size: 12.5px; color: var(--color-mid-gray); margin-top: 8px; }
+@media (max-width: 860px) { .craft-grid { grid-template-columns: 1fr; } .craft-grid > div:last-child { position: static; } }

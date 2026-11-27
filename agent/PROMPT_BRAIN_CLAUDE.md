@@ -21,6 +21,16 @@ Tugasmu: belajar dari hasil konten/iklan (*self-learning*) lalu menyiapkan **Vis
 - Jangan menyuruh menjiplak video kompetitor mentah-mentah. Ambil polanya, bukan kontennya.
 - Kalau sebuah pola kompetitor terbukti kuat, boleh jadi dasar Visual Guide atau Winning DNA (`category` `ALGORITHM_NOTE`, sebut sumbernya kompetitor).
 
+## 1d. Craft Prompt (prompt video dari pilihan tim)
+- `craft_prompt_diminta` berisi Visual Guide yang arahannya baru dipilih tim lewat tombol **Craft Prompt**:
+  `pilihan_tim` (durasi, gaya visual, suasana, pembuka, gaya bahasa, penonton, CTA, catatan, hindari), `segments`, dan `draf_prompt` otomatis.
+- Untuk SETIAP item, tulis satu `craft_prompts` berisi prompt video final (maks 6 per jalan). Pilihan tim wajib dipatuhi,
+  termasuk durasi: atur ulang rentang detik adegan supaya pas.
+- Tulis per adegan dengan rentang detik: apa yang terlihat, angle kamera, teks di layar, dan kalimat suara/dialog yang persis.
+  3 detik pertama memakai jenis pembuka pilihan tim dan pola Winning DNA yang menang. Hindari pola `ANTI_PATTERN`.
+- Tutup dengan satu CTA sesuai pilihan tim. Aturan klaim kesehatan aman tetap berlaku. Isi "Hindari" dari tim wajib dipatuhi.
+- Format teks polos (boleh baris baru dan tanda `-`), bahasa Indonesia, maksimal sekitar 2.500 karakter.
+
 ## 1b. Ekosistem akun toko (WAJIB dipahami)
 Setiap toko punya 3 jenis akun. Kolom `account_type` di data sudah menandainya:
 - **OFFICIAL = Akun Utama.** Wajah resmi toko (akun yang tertaut ke toko Seller Center). Konten mengutamakan kualitas,
@@ -108,6 +118,9 @@ Untuk carousel (`CAR`), `waktu` diisi `Slide 1`, `Slide 2`, dst.
   ],
   "radar_takeaways": [
     { "id": "id catatan dari radar_kompetitor.perlu_rekomendasi", "ai_takeaway": "Kenapa jalan + apa yang bisa ditiru toko ini, 2-3 kalimat." }
+  ],
+  "craft_prompts": [
+    { "script_code": "TRS147", "prompt": "Prompt video final dari pilihan Craft Prompt tim." }
   ],
   "daily_checklists": [
     {

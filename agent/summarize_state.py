@@ -87,6 +87,14 @@ def main(path, store):
             "total_biaya": sum(a.get("ad_spend_idr") or 0 for a in ads_paid),
             "total_omzet": sum(a.get("gmv_idr") or 0 for a in ads_paid),
         },
+        "craft_prompt_diminta": [
+            {"script_code": s.get("script_code"), "creative_name": s.get("creative_name"), "title": s.get("title"),
+             "product_focus": s.get("product_focus"), "format": s.get("format"), "target_account": s.get("target_account"),
+             "based_on_dna": s.get("based_on_dna"), "segments": json.loads(s.get("visual_guide_json") or "[]"),
+             "catatan_syuting": s.get("creative_guide"), "pilihan_tim": json.loads(s.get("craft_json") or "{}"),
+             "draf_prompt": s.get("craft_prompt")}
+            for s in scripts if s.get("craft_json") and s.get("craft_status") == "draft"
+        ][:6],
         "radar_kompetitor": radar(mine(d.get("competitor_radar", []))),
         "nomor_trs_berikutnya": max([146] + nums) + 1,
     }

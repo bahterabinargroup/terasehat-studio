@@ -1056,6 +1056,7 @@
             <div style="font-size:12px;color:var(--lime);margin-top:2px">🧬 Dasar: ${esc(s.based_on_dna)}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-craft="${idx}">🎛️ Craft Prompt${s.craft_status === "claude" ? " ✓" : ""}</button>
             ${s.human_status === "approved"
               ? `<button class="btn" style="height:32px;padding:0 12px;font-size:13px" data-script-act="waiting_check" data-idx="${idx}">Batalkan approve</button>`
               : `<button class="btn btn-primary" style="height:32px;padding:0 12px;font-size:13px" data-script-act="approved" data-idx="${idx}">Approve</button>`}
@@ -1192,6 +1193,119 @@
     `;
   }
 
+  // Craft Prompt: tim memilih arahan, prompt video langsung disusun (draf), lalu disempurnakan Claude di jadwal berikutnya.
+  const CRAFT_OPTS = {
+    durasi: [["20", "20 detik"], ["30", "30 detik"], ["45", "45 detik"]],
+    gaya_visual: ["Promo bersih (foto produk jadi bintang)", "Teks bergerak (kinetic typography)", "Kartun berwarna cerah",
+      "Ilustrasi datar minimalis", "Editorial majalah", "Video asli talent (UGC)"],
+    suasana: ["hangat", "edukatif", "ceria", "tenang", "meyakinkan", "energik", "santai"],
+    pembuka: ["Pertanyaan yang dekat dengan keseharian", "Situasi sehari-hari", "Fakta singkat yang aman", "Kebiasaan lama vs coba yang baru"],
+    bahasa: ["Santai seperti teman", "Hangat untuk keluarga", "Ringkas dan lugas", "Sopan dan rapi"],
+    target: ["Lansia", "Ibu dan keluarga", "Pekerja kantoran", "Umum"],
+    cta: ["Cek keranjang kuning", "Cek keranjang kuning, ada paket hemat", "Coba dulu, cek keranjang kuning"],
+  };
+
+  function openCraft(idx) {
+    const s = state.data.scripts_briefs[idx];
+    if (!s) return;
+    let saved = {};
+    try { saved = JSON.parse(s.craft_json || "{}") || {}; } catch (_) {}
+    const c = { durasi: "30", suasana: [], cta: CRAFT_OPTS.cta[0], ...saved };
+    let dirty = false, expanded = false;
+    const box = document.getElementById("app-modal-content");
+    box.classList.add("modal-wide");
+    const chips = (key, multi) => (CRAFT_OPTS[key]).map(o => {
+      const [val, label] = Array.isArray(o) ? o : [o, o];
+      const on = multi ? c[key].includes(val) : String(c[key] || "") === val;
+      return `<button type="button" class="chip${on ? " on" : ""}" data-ck="${key}" data-cv="${esc(val)}">${esc(label)}</button>`;
+    }).join("");
+    const group = (title, key, multi, hint) => `<div class="craft-group"><div class="craft-label">${title}${hint ? ` <span>${hint}</span>` : ""}</div><div class="chips">${chips(key, multi)}</div></div>`;
+    const statusLine = () => {
+      if (dirty) return `<b>Ada perubahan yang belum disimpan. Klik Simpan untuk menyusun prompt baru.</b>`;
+      if (s.craft_status === "claude") return `✓ Disusun Claude${s.craft_updated_at ? " • " + esc(s.craft_updated_at.slice(0, 16)) + " UTC" : ""}`;
+      if (s.craft_status === "draft") return `Draf otomatis dari pilihanmu. Claude menyempurnakannya di jadwal berikutnya (06:00, 12:00, 18:00, 21:00 WIB).`;
+      return "";
+    };
+    const draw = () => {
+      box.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+          <div>
+            <h2 style="margin:0;font-size:18px">Craft Prompt · ${esc(s.script_code)}</h2>
+            <p style="margin:4px 0 0;font-size:12.5px;color:var(--teks2);max-width:720px">Pilih arahan, lalu klik Simpan. Prompt langsung disusun dari pilihanmu, adegan Visual Guide, dan pola Winning DNA. Di jadwal berikutnya Claude menyempurnakannya (dialog per adegan, waktu pas durasi). Aturan klaim aman tetap berlaku.</p>
+          </div>
+          <button class="btn" id="cp-close">Tutup</button>
+        </div>
+        <div class="craft-grid">
+          <div>
+            ${group("Durasi total", "durasi")}
+            ${group("Gaya visual", "gaya_visual")}
+            ${group("Suasana", "suasana", true, "(maks 3)")}
+            ${group("Pembuka (3 detik pertama)", "pembuka")}
+            ${group("Gaya bahasa", "bahasa")}
+            ${group("Untuk siapa", "target")}
+            ${group("Penutup (CTA)", "cta")}
+            <div class="craft-group"><div class="craft-label">Catatan tambahan <span>(opsional)</span></div>
+              <textarea class="input craft-text" id="cp-catatan" rows="3" placeholder="Contoh: warna dominan hijau, tekankan sarapan praktis 2 menit">${esc(c.catatan || "")}</textarea></div>
+            <div class="craft-group"><div class="craft-label">Hindari <span>(opsional)</span></div>
+              <textarea class="input craft-text" id="cp-hindari" rows="2" placeholder="Contoh: jangan sebut harga, jangan pakai emoji">${esc(c.hindari || "")}</textarea></div>
+          </div>
+          <div>
+            <div class="craft-panel">
+              <div style="font-weight:700;margin-bottom:8px">Prompt dari Claude</div>
+              <pre class="craft-prompt${expanded ? " full" : ""}">${s.craft_prompt ? esc(s.craft_prompt) : "Belum ada prompt. Pilih arahan di kiri, lalu klik Simpan & susun prompt."}</pre>
+              <div class="craft-status">${statusLine()}</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                <button class="btn btn-primary" id="cp-save">Simpan & susun prompt</button>
+                <button class="btn" id="cp-copy" ${s.craft_prompt ? "" : "disabled"}>Salin prompt</button>
+                <button class="btn" id="cp-full" ${s.craft_prompt ? "" : "disabled"}>${expanded ? "Ringkas tampilan" : "Lihat prompt lengkap video"}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      bind();
+    };
+    const readText = () => {
+      c.catatan = document.getElementById("cp-catatan").value;
+      c.hindari = document.getElementById("cp-hindari").value;
+    };
+    const modal = document.getElementById("app-modal");
+    const close = () => { modal.classList.remove("open"); box.classList.remove("modal-wide"); };
+    const bind = () => {
+      document.getElementById("cp-close").onclick = close;
+      box.querySelectorAll("[data-ck]").forEach(b => b.onclick = () => {
+        readText();
+        const k = b.dataset.ck, v = b.dataset.cv;
+        if (k === "suasana") {
+          if (c.suasana.includes(v)) c.suasana = c.suasana.filter(x => x !== v);
+          else if (c.suasana.length < 3) c.suasana = [...c.suasana, v];
+          else return;
+        } else c[k] = c[k] === v && !["durasi", "cta"].includes(k) ? "" : v;
+        dirty = true; draw();
+      });
+      ["cp-catatan", "cp-hindari"].forEach(id => document.getElementById(id).oninput = () => {
+        if (!dirty) { dirty = true; box.querySelector(".craft-status").innerHTML = statusLine(); }
+      });
+      document.getElementById("cp-save").onclick = async (e) => {
+        readText();
+        e.target.disabled = true; e.target.textContent = "Menyusun...";
+        try {
+          const r = await api("/api/update", { type: "craft_save", script_code: s.script_code, craft: c });
+          s.craft_json = JSON.stringify(r.craft); s.craft_prompt = r.prompt; s.craft_status = r.craft_status;
+          s.craft_updated_at = new Date().toISOString().replace("T", " ").slice(0, 19);
+          Object.assign(c, r.craft); dirty = false; draw(); render();
+        } catch (err) { e.target.disabled = false; e.target.textContent = "Simpan & susun prompt"; alert("Gagal simpan: " + err.message); }
+      };
+      document.getElementById("cp-copy").onclick = async (e) => {
+        try { await navigator.clipboard.writeText(s.craft_prompt || ""); e.target.textContent = "Tersalin ✓"; }
+        catch (_) { e.target.textContent = "Gagal menyalin"; }
+        setTimeout(() => { e.target.textContent = "Salin prompt"; }, 1500);
+      };
+      document.getElementById("cp-full").onclick = () => { readText(); expanded = !expanded; draw(); };
+    };
+    draw();
+    modal.classList.add("open");
+  }
+
   function openRadarForm(id) {
     const r = id ? (state.raw.competitor_radar || []).find(x => x.id === id) : null;
     const stores = r ? state.stores : visibleStores();
@@ -1199,6 +1313,7 @@
     const n = (k) => r && r[k] ? Number(r[k]) : "";
     const src = r ? ({ TIKTOK_ORGANIC: "ORGANIC", TIKTOK_ADS_LIB: "ADS", TIKTOK_SHOP: "PRODUCT", CREATOR_EMAIL: "CREATOR" }[r.source] || r.source) : "ORGANIC";
     const lbl = (t, inner) => `<label class="radar-field" style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--teks2);margin-bottom:10px">${t}${inner}</label>`;
+    document.getElementById("app-modal-content").classList.remove("modal-wide");
     document.getElementById("app-modal-content").innerHTML = `
       <h2 style="margin:0 0 16px;font-size:18px">${r ? "Edit catatan kompetitor" : "Tambah catatan kompetitor"}</h2>
       <div class="grid-2" style="gap:0 12px">
@@ -1322,6 +1437,8 @@
     container.querySelectorAll("[data-ad-filter]").forEach(b => {
       b.onclick = () => { state.adFilter = b.dataset.adFilter; render(); };
     });
+
+    container.querySelectorAll("[data-craft]").forEach(btn => { btn.onclick = () => openCraft(Number(btn.dataset.craft)); });
 
     container.querySelectorAll("[data-script-act]").forEach(btn => {
       btn.onclick = async () => {
@@ -1500,7 +1617,7 @@
   });
 
   document.getElementById("app-modal").onclick = (e) => {
-    if (e.target.id === "app-modal") e.target.classList.remove("open");
+    if (e.target.id === "app-modal") { e.target.classList.remove("open"); document.getElementById("app-modal-content").classList.remove("modal-wide"); }
   };
 
   render();
