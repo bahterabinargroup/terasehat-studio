@@ -753,9 +753,9 @@
             : `📦 <b>${fmt(totalOrders)}</b> pesanan dari video iklan`}</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-lbl">${acct.days ? "BIAYA IKLAN (TOTAL AKUN)" : "BIAYA IKLAN (PER VIDEO)"}</div>
-          <div class="kpi-val">${rp(totalSpend)}</div>
-          <div class="kpi-sub">ROAS: <b style="color:var(--lime)">${roas}x</b>${acct.days ? ` · + PPN 11%: <b>${rp(Math.round(totalSpend * 1.11))}</b>` : ""}</div>
+          <div class="kpi-lbl">${acct.days ? "BIAYA IKLAN + PPN 11% (TOTAL AKUN)" : "BIAYA IKLAN (PER VIDEO)"}</div>
+          <div class="kpi-val">${rp(acct.days ? Math.round(totalSpend * 1.11) : totalSpend)}</div>
+          <div class="kpi-sub">ROAS: <b style="color:var(--lime)">${roas}x</b></div>
         </div>
         <div class="kpi-card">
           <div class="kpi-lbl">TOTAL VIEWS KONTEN</div>
